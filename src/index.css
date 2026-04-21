@@ -253,6 +253,45 @@
   .light .input-king {
     @apply text-king-black border-black/15 placeholder:text-black/40;
   }
+
+  /** Inputs em bloco — contorno discreto (sem borda branca forte). */
+  .input-king-panel {
+    @apply w-full rounded-md bg-king-black/55 px-3.5 py-3.5 text-base text-king-bone placeholder:text-king-silver/45 outline-none transition;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+  .input-king-panel:focus {
+    box-shadow: inset 0 0 0 1px rgba(220, 20, 60, 0.5);
+  }
+  .light .input-king-panel {
+    @apply bg-white text-king-black placeholder:text-black/40;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+  .light .input-king-panel:focus {
+    box-shadow: inset 0 0 0 1px rgba(220, 20, 60, 0.45);
+  }
+
+  /** Select nativo legível no Windows (lista escura + texto claro). */
+  .select-king-dark {
+    @apply w-full rounded-md bg-king-jet px-3.5 py-3.5 font-mono text-sm uppercase tracking-[0.18em] text-king-bone outline-none transition;
+    color-scheme: dark;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+  .select-king-dark:focus {
+    box-shadow: inset 0 0 0 1px rgba(220, 20, 60, 0.5);
+  }
+  .select-king-dark option {
+    background-color: #0f0f0f;
+    color: #faf7f0;
+  }
+  .light .select-king-dark {
+    @apply bg-king-bone text-king-black;
+    color-scheme: light;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+  .light .select-king-dark option {
+    background-color: #faf7f0;
+    color: #0a0a0a;
+  }
 }
 
 /* ===== UTILITIES ===== */

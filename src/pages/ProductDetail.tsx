@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  HiOutlineShoppingBag,
+  HiOutlineShoppingCart,
   HiOutlineHeart,
   HiArrowNarrowLeft,
+  HiOutlineSparkles,
+  HiOutlinePencilAlt,
 } from 'react-icons/hi';
+import { Cross, Crown, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useProductsStore } from '@/store/useProductsStore';
 import { useCartStore } from '@/store/useCartStore';
@@ -14,6 +17,21 @@ import type { Product, ProductSize } from '@/services/products.service';
 import { getProduct } from '@/services/products.service';
 import { SEED_PRODUCTS } from '@/data/seedProducts';
 import { cn } from '@/utils/cn';
+import StampSelector from '@/components/products/StampSelector';
+import MeasureGuideModal from '@/components/products/MeasureGuideModal';
+import { STAMPS, type Stamp } from '@/assets/estampas';
+import {
+  getEffectiveBackStampIds,
+  getEffectiveFrontStampIds,
+  productAllowsBackStamps,
+  productAllowsFrontStamps,
+} from '@/utils/productStamps';
+import {
+  FRONT_LOGO_STAMPS,
+  FRONT_LOGO_PRETO_ID,
+  kingLogoPretoOnDarkImgClass,
+  type FrontLogoStamp,
+} from '@/assets/logos';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -28,6 +46,45 @@ export default function ProductDetail() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [size, setSize] = useState<ProductSize | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [stamp, setStamp] = useState<Stamp | null>(null);
+  const [stampFront, setStampFront] = useState<FrontLogoStamp | null>(null);
+  const [stampOpen, setStampOpen] = useState(false);
+  const [measureGuideOpen, setMeasureGuideOpen] = useState(false);
+
+  const stampCountLabel = useMemo(() => {
+    if (!product) return `${STAMPS.length}+ opções exclusivas`;
+    if (product.allowedBackStampIds === undefined)
+      return `${STAMPS.length}+ opções exclusivas`;
+    const n = getEffectiveBackStampIds(product).length;
+    return `${n} opç${n === 1 ? 'ão' : 'ões'} nesta peça`;
+  }, [product]);
+
+  const allowsBackStamps = useMemo(
+    () => (product ? productAllowsBackStamps(product) : false),
+    [product]
+  );
+  const allowsFrontStamps = useMemo(
+    () => (product ? productAllowsFrontStamps(product) : false),
+    [product]
+  );
+  const frontOptions = useMemo(() => {
+    if (!product) return FRONT_LOGO_STAMPS;
+    const ids = getEffectiveFrontStampIds(product);
+    return FRONT_LOGO_STAMPS.filter((o) => ids.includes(o.id));
+  }, [product]);
+  const backStampIdsForModal = useMemo(() => {
+    if (!product) return undefined as string[] | undefined;
+    if (product.allowedBackStampIds === undefined) return undefined;
+    return getEffectiveBackStampIds(product);
+  }, [product]);
+
+  useEffect(() => {
+    if (!product) return;
+    const backs = getEffectiveBackStampIds(product);
+    setStamp((prev) => (prev && !backs.includes(prev.id) ? null : prev));
+    const fronts = getEffectiveFrontStampIds(product);
+    setStampFront((prev) => (prev && !fronts.includes(prev.id) ? null : prev));
+  }, [product]);
 
   useEffect(() => {
     if (!fetched) fetchStore();
@@ -79,20 +136,33 @@ export default function ProductDetail() {
     );
   }
 
+  const buildCartItem = () => ({
+    productId: product!.id,
+    name: product!.name,
+    price: product!.price,
+    image: product!.images[0],
+    size: size as ProductSize,
+    quantity,
+    stamp: stamp
+      ? { id: stamp.id, name: stamp.name, src: stamp.src }
+      : null,
+    stampFront: stampFront
+      ? { id: stampFront.id, name: stampFront.name, src: stampFront.src }
+      : null,
+  });
+
   const addToCart = () => {
     if (!size) {
       toast.error('Selecione um tamanho');
       return;
     }
-    add({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[0],
-      size,
-      quantity,
-    });
-    toast.success('Adicionado à sacola real');
+    add(buildCartItem());
+    const bits: string[] = [];
+    if (stamp) bits.push(`costas: ${stamp.name}`);
+    if (stampFront) bits.push(`frente: ${stampFront.name}`);
+    toast.success(
+      bits.length > 0 ? `Adicionado (${bits.join(' · ')})` : 'Adicionado à sacola real'
+    );
   };
 
   const buyNow = () => {
@@ -100,14 +170,7 @@ export default function ProductDetail() {
       toast.error('Selecione um tamanho');
       return;
     }
-    add({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[0],
-      size,
-      quantity,
-    });
+    add(buildCartItem());
     navigate('/checkout');
   };
 
@@ -206,12 +269,152 @@ export default function ProductDetail() {
               {product.description}
             </motion.p>
 
+            {allowsBackStamps && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-6"
+            >
+              {stamp ? (
+                <motion.div
+                  layout
+                  className="flex items-center gap-4 border border-king-red/40 bg-king-red/[0.06] p-3 md:p-4"
+                >
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden bg-king-black/60 md:h-24 md:w-24">
+                    <img
+                      src={stamp.src}
+                      alt={stamp.name}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-red">
+                      Estampa costas
+                    </span>
+                    <span className="heading-display text-base text-king-bone md:text-lg">
+                      {stamp.name}
+                    </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => setStampOpen(true)}
+                        className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver transition hover:text-king-bone"
+                      >
+                        <HiOutlinePencilAlt /> Trocar
+                      </button>
+                      <button
+                        onClick={() => setStamp(null)}
+                        className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setStampOpen(true)}
+                  className="group flex w-full items-center justify-between gap-4 border border-white/15 bg-king-black/30 p-4 text-left transition hover:border-king-red hover:bg-king-red/[0.05]"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full border border-king-red/40 text-king-red transition group-hover:bg-king-red group-hover:text-king-bone">
+                      <HiOutlineSparkles className="text-lg" />
+                    </span>
+                    <div>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-bone">
+                        Selecionar estampa (costas)
+                      </p>
+                      <p className="mt-0.5 font-serif italic text-xs text-king-silver/70">
+                        Arte no verso da peça. {stampCountLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver transition group-hover:text-king-red">
+                    Abrir →
+                  </span>
+                </motion.button>
+              )}
+            </motion.div>
+            )}
+
+            {allowsFrontStamps && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-5"
+            >
+              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver">
+                Estampa frente
+              </p>
+              <p className="mt-1 font-serif italic text-xs text-king-silver/70">
+                Logo oficial KING —{' '}
+                {frontOptions.length === FRONT_LOGO_STAMPS.length
+                  ? 'escolha uma das três cores para o peito.'
+                  : `${frontOptions.length} opç${frontOptions.length === 1 ? 'ão' : 'ões'} disponí${frontOptions.length === 1 ? 'vel' : 'veis'} nesta peça.`}
+              </p>
+              <div
+                className={cn(
+                  'mt-3 grid gap-2 sm:gap-3',
+                  frontOptions.length === 1 && 'grid-cols-1',
+                  frontOptions.length === 2 && 'grid-cols-2',
+                  frontOptions.length >= 3 && 'grid-cols-3'
+                )}
+              >
+                {frontOptions.map((opt) => {
+                  const active = stampFront?.id === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setStampFront(opt)}
+                      className={cn(
+                        'flex flex-col items-center gap-2 rounded-xl border bg-king-black/40 p-3 transition md:p-4',
+                        active
+                          ? 'border-king-red bg-king-red/[0.08]'
+                          : 'border-white/10 hover:border-king-red/50'
+                      )}
+                    >
+                      <div className="flex h-14 w-full items-center justify-center md:h-16">
+                        <img
+                          src={opt.src}
+                          alt={opt.name}
+                          className={cn(
+                            'max-h-full max-w-[88%] object-contain',
+                            opt.id === FRONT_LOGO_PRETO_ID && kingLogoPretoOnDarkImgClass
+                          )}
+                        />
+                      </div>
+                      <span className="text-center font-mono text-[9px] uppercase leading-tight tracking-[0.18em] text-king-silver">
+                        {opt.name.replace(/^KING · /, '')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {stampFront && (
+                <button
+                  type="button"
+                  onClick={() => setStampFront(null)}
+                  className="mt-3 font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red"
+                >
+                  Remover logo da frente
+                </button>
+              )}
+            </motion.div>
+            )}
+
             <div className="mt-8">
               <div className="mb-3 flex items-center justify-between">
                 <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver">
                   Tamanho
                 </p>
-                <button className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-red hover:underline">
+                <button
+                  type="button"
+                  onClick={() => setMeasureGuideOpen(true)}
+                  className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-red hover:underline"
+                >
                   Guia de medidas
                 </button>
               </div>
@@ -262,7 +465,7 @@ export default function ProductDetail() {
                 onClick={addToCart}
                 className="btn-king flex-1 group"
               >
-                <HiOutlineShoppingBag /> Adicionar à sacola
+                <HiOutlineShoppingCart /> Adicionar à sacola
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.97 }}
@@ -292,14 +495,42 @@ export default function ProductDetail() {
               )}
             </AnimatePresence>
 
-            <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/5 pt-6 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/80">
-              <div>✝ Envio em 24h</div>
-              <div>👑 Trocas em 30 dias</div>
-              <div>🔒 Pagamento seguro</div>
+            <div className="mt-10 grid grid-cols-3 gap-3 border-t border-white/5 pt-6 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/80 sm:gap-4">
+              {[
+                { Icon: Cross, text: 'Envio em 24h' },
+                { Icon: Crown, text: 'Trocas em 30 dias' },
+                { Icon: Lock, text: 'Pagamento seguro' },
+              ].map(({ Icon, text }) => (
+                <div
+                  key={text}
+                  className="flex items-center justify-center gap-2 text-center"
+                >
+                  <Icon
+                    className="h-4 w-4 shrink-0 text-king-silver/90"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <span>{text}</span>
+                </div>
+              ))}
             </div>
           </motion.div>
         </div>
       </div>
+
+      <StampSelector
+        open={stampOpen}
+        onClose={() => setStampOpen(false)}
+        selectedId={stamp?.id ?? null}
+        onSelect={(s) => setStamp(s)}
+        headingNote="Verso da peça (costas)"
+        allowedStampIds={backStampIdsForModal}
+      />
+
+      <MeasureGuideModal
+        open={measureGuideOpen}
+        onClose={() => setMeasureGuideOpen(false)}
+      />
     </main>
   );
 }

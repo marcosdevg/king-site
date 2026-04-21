@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import Lenis from 'lenis';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { setLenisRoot } from '@/lib/lenisRoot';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -21,6 +22,7 @@ export default function SmoothScroll({ children }: Props) {
       touchMultiplier: 1.4,
     });
     lenisRef.current = lenis;
+    setLenisRoot(lenis);
 
     lenis.on('scroll', ScrollTrigger.update);
 
@@ -32,6 +34,7 @@ export default function SmoothScroll({ children }: Props) {
 
     return () => {
       gsap.ticker.remove(raf);
+      setLenisRoot(null);
       lenis.destroy();
     };
   }, []);

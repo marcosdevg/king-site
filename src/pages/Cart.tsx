@@ -7,6 +7,8 @@ import {
   HiArrowNarrowRight,
 } from 'react-icons/hi';
 import { useCartStore } from '@/store/useCartStore';
+import { FRONT_LOGO_PRETO_ID, kingLogoPretoOnDarkImgClass } from '@/assets/logos';
+import { cn } from '@/utils/cn';
 import { formatBRL } from '@/utils/format';
 import GlowButton from '@/components/ui/GlowButton';
 import KingLogo from '@/components/ui/KingLogo';
@@ -52,10 +54,13 @@ export default function Cart() {
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_380px]">
             <div className="space-y-4">
               <AnimatePresence>
-                {items.map((item) => (
+                {items.map((item) => {
+                  const stampId = item.stamp?.id ?? undefined;
+                  const stampFrontId = item.stampFront?.id ?? undefined;
+                  return (
                   <motion.div
                     layout
-                    key={`${item.productId}-${item.size}`}
+                    key={`${item.productId}-${item.size}-${item.stamp?.id ?? 'nostamp'}-${item.stampFront?.id ?? 'nofront'}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -30 }}
@@ -70,6 +75,28 @@ export default function Cart() {
                         alt={item.name}
                         className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
                       />
+                      {item.stampFront && (
+                        <span className="absolute left-1 top-1 flex h-10 w-10 items-center justify-center rounded-sm border border-white/25 bg-king-black/80">
+                          <img
+                            src={item.stampFront.src}
+                            alt=""
+                            className={cn(
+                              'max-h-full max-w-full object-contain p-0.5',
+                              item.stampFront.id === FRONT_LOGO_PRETO_ID &&
+                                kingLogoPretoOnDarkImgClass
+                            )}
+                          />
+                        </span>
+                      )}
+                      {item.stamp && (
+                        <span className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-sm border border-king-red/50 bg-king-black/80">
+                          <img
+                            src={item.stamp.src}
+                            alt=""
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        </span>
+                      )}
                     </Link>
                     <div className="flex flex-1 flex-col justify-between">
                       <div>
@@ -82,11 +109,29 @@ export default function Cart() {
                         <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver/70">
                           Tamanho {item.size}
                         </p>
+                        {item.stamp && (
+                          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.25em] text-king-red">
+                            Costas: {item.stamp.name}
+                          </p>
+                        )}
+                        {item.stampFront && (
+                          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+                            Frente: {item.stampFront.name}
+                          </p>
+                        )}
                       </div>
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
                         <div className="inline-flex items-center border border-white/10">
                           <button
-                            onClick={() => updateQty(item.productId, item.size, item.quantity - 1)}
+                            onClick={() =>
+                              updateQty(
+                                item.productId,
+                                item.size,
+                                item.quantity - 1,
+                                stampId,
+                                stampFrontId
+                              )
+                            }
                             className="h-10 w-10 text-king-silver hover:text-king-red"
                           >
                             <HiOutlineMinus className="mx-auto text-sm" />
@@ -95,7 +140,15 @@ export default function Cart() {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => updateQty(item.productId, item.size, item.quantity + 1)}
+                            onClick={() =>
+                              updateQty(
+                                item.productId,
+                                item.size,
+                                item.quantity + 1,
+                                stampId,
+                                stampFrontId
+                              )
+                            }
                             className="h-10 w-10 text-king-silver hover:text-king-red"
                           >
                             <HiOutlinePlus className="mx-auto text-sm" />
@@ -106,7 +159,9 @@ export default function Cart() {
                             {formatBRL(item.price * item.quantity)}
                           </p>
                           <button
-                            onClick={() => remove(item.productId, item.size)}
+                            onClick={() =>
+                              remove(item.productId, item.size, stampId, stampFrontId)
+                            }
                             className="text-king-silver/70 transition hover:text-king-red"
                             aria-label="Remover"
                           >
@@ -116,7 +171,8 @@ export default function Cart() {
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </AnimatePresence>
 
               <div className="flex items-center justify-between pt-4">

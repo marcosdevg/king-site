@@ -188,6 +188,16 @@ export default function Dashboard() {
                               <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/70">
                                 Tam {item.size} · {item.quantity}x · {formatBRL(item.price)}
                               </p>
+                              {item.stamp && (
+                                <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.2em] text-king-red/90">
+                                  Costas: {item.stamp.name}
+                                </p>
+                              )}
+                              {item.stampFront && (
+                                <p className="truncate font-mono text-[9px] uppercase tracking-[0.2em] text-king-silver/75">
+                                  Frente: {item.stampFront.name}
+                                </p>
+                              )}
                             </div>
                           </li>
                         ))}

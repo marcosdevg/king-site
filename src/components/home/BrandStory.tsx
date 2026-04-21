@@ -33,7 +33,7 @@ export default function BrandStory() {
   }, []);
 
   const phrase =
-    'KING nasceu da fé e do fogo. Cada peça é uma oração tecida em algodão: oversized, soberana e sagrada. Vista-se como quem foi chamado para reinar.';
+    'JOSUÉ 1:9: "Seja forte e corajoso! Não se apavore nem desanime, pois o Senhor, o seu Deus, estará com você por onde você andar"';
   const words = phrase.split(' ');
 
   return (

@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaInstagram, FaTiktok, FaWhatsapp, FaYoutube } from 'react-icons/fa';
 import { openWhatsApp, buildSupportMessage } from '@/utils/whatsapp';
 import KingLogo from '@/components/ui/KingLogo';
+import MeasureGuideModal from '@/components/products/MeasureGuideModal';
 
 export default function Footer() {
+  const [measureGuideOpen, setMeasureGuideOpen] = useState(false);
+
   return (
-    <footer className="relative mt-32 overflow-hidden border-t border-white/5 bg-king-black pt-24 pb-10 text-king-silver">
+    <footer className="relative overflow-hidden border-t border-white/5 bg-king-black pt-24 pb-10 text-king-silver">
       <div className="light-rays opacity-20" />
       <div className="noise-overlay" />
 
@@ -60,7 +64,15 @@ export default function Footer() {
                 </button>
               </li>
               <li><a className="hover:text-king-red transition">Trocas & Devoluções</a></li>
-              <li><a className="hover:text-king-red transition">Guia de Tamanhos</a></li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setMeasureGuideOpen(true)}
+                  className="hover:text-king-red transition"
+                >
+                  Guia de Tamanhos
+                </button>
+              </li>
               <li><a className="hover:text-king-red transition">Envio</a></li>
             </ul>
           </div>
@@ -103,6 +115,11 @@ export default function Footer() {
           <p>Feito com fé e código · BRASIL</p>
         </div>
       </div>
+
+      <MeasureGuideModal
+        open={measureGuideOpen}
+        onClose={() => setMeasureGuideOpen(false)}
+      />
     </footer>
   );
 }

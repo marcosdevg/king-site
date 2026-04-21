@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ProductSize } from '@/services/products.service';
 
+export interface CartItemStamp {
+  id: string;
+  name: string;
+  src: string;
+}
+
 export interface CartItem {
   productId: string;
   name: string;
@@ -9,7 +15,13 @@ export interface CartItem {
   image: string;
   size: ProductSize;
   quantity: number;
+  /** Estampa das costas (arte da pasta `estampas`). */
+  stamp?: CartItemStamp | null;
+  /** Estampa da frente — uma das 3 logos oficiais. */
+  stampFront?: CartItemStamp | null;
 }
+
+type StampId = string | null | undefined;
 
 interface CartState {
   items: CartItem[];
@@ -18,12 +30,37 @@ interface CartState {
   close: () => void;
   toggle: () => void;
   add: (item: CartItem) => void;
-  remove: (productId: string, size: ProductSize) => void;
-  updateQty: (productId: string, size: ProductSize, qty: number) => void;
+  remove: (
+    productId: string,
+    size: ProductSize,
+    stampId?: StampId,
+    stampFrontId?: StampId
+  ) => void;
+  updateQty: (
+    productId: string,
+    size: ProductSize,
+    qty: number,
+    stampId?: StampId,
+    stampFrontId?: StampId
+  ) => void;
   clear: () => void;
   subtotal: () => number;
   count: () => number;
 }
+
+const sameVariant = (
+  a: CartItem,
+  b: {
+    productId: string;
+    size: ProductSize;
+    stampId?: StampId;
+    stampFrontId?: StampId;
+  }
+) =>
+  a.productId === b.productId &&
+  a.size === b.size &&
+  (a.stamp?.id ?? null) === (b.stampId ?? null) &&
+  (a.stampFront?.id ?? null) === (b.stampFrontId ?? null);
 
 export const useCartStore = create<CartState>()(
   persist(
@@ -35,13 +72,23 @@ export const useCartStore = create<CartState>()(
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
       add: (item) =>
         set((s) => {
-          const existing = s.items.find(
-            (i) => i.productId === item.productId && i.size === item.size
+          const existing = s.items.find((i) =>
+            sameVariant(i, {
+              productId: item.productId,
+              size: item.size,
+              stampId: item.stamp?.id ?? null,
+              stampFrontId: item.stampFront?.id ?? null,
+            })
           );
           if (existing) {
             return {
               items: s.items.map((i) =>
-                i.productId === item.productId && i.size === item.size
+                sameVariant(i, {
+                  productId: item.productId,
+                  size: item.size,
+                  stampId: item.stamp?.id ?? null,
+                  stampFrontId: item.stampFront?.id ?? null,
+                })
                   ? { ...i, quantity: i.quantity + item.quantity }
                   : i
               ),
@@ -50,17 +97,17 @@ export const useCartStore = create<CartState>()(
           }
           return { items: [...s.items, item], isOpen: true };
         }),
-      remove: (productId, size) =>
+      remove: (productId, size, stampId, stampFrontId) =>
         set((s) => ({
           items: s.items.filter(
-            (i) => !(i.productId === productId && i.size === size)
+            (i) => !sameVariant(i, { productId, size, stampId, stampFrontId })
           ),
         })),
-      updateQty: (productId, size, qty) =>
+      updateQty: (productId, size, qty, stampId, stampFrontId) =>
         set((s) => ({
           items: s.items
             .map((i) =>
-              i.productId === productId && i.size === size
+              sameVariant(i, { productId, size, stampId, stampFrontId })
                 ? { ...i, quantity: Math.max(1, qty) }
                 : i
             )

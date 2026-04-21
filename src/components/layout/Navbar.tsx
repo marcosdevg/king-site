@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  HiOutlineShoppingBag,
+  HiOutlineShoppingCart,
   HiOutlineUser,
   HiOutlineMenu,
   HiOutlineX,
@@ -150,7 +150,7 @@ export default function Navbar() {
               className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-king-silver transition hover:border-king-red hover:text-king-bone"
               data-cursor="hover"
             >
-              <HiOutlineShoppingBag className="text-lg" />
+              <HiOutlineShoppingCart className="text-lg" />
               <AnimatePresence>
                 {cartCount > 0 && (
                   <motion.span

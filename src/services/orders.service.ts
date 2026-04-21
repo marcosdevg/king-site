@@ -19,6 +19,12 @@ export type OrderStatus =
   | 'entregue'
   | 'cancelado';
 
+export interface OrderItemStamp {
+  id: string;
+  name: string;
+  src: string;
+}
+
 export interface OrderItem {
   productId: string;
   name: string;
@@ -26,6 +32,8 @@ export interface OrderItem {
   image: string;
   size: ProductSize;
   quantity: number;
+  stamp?: OrderItemStamp | null;
+  stampFront?: OrderItemStamp | null;
 }
 
 export interface Shipping {

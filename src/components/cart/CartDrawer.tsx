@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { HiOutlineX, HiOutlinePlus, HiOutlineMinus, HiOutlineTrash } from 'react-icons/hi';
 import { Link } from 'react-router-dom';
 import { useCartStore } from '@/store/useCartStore';
+import { FRONT_LOGO_PRETO_ID, kingLogoPretoOnDarkImgClass } from '@/assets/logos';
+import { cn } from '@/utils/cn';
 import { formatBRL } from '@/utils/format';
 import GlowButton from '@/components/ui/GlowButton';
 import KingLogo from '@/components/ui/KingLogo';
@@ -62,21 +64,52 @@ export default function CartDrawer() {
                 </div>
               ) : (
                 <ul className="flex flex-col gap-5">
-                  {items.map((item) => (
+                  {items.map((item) => {
+                    const stampId = item.stamp?.id ?? undefined;
+                    const stampFrontId = item.stampFront?.id ?? undefined;
+                    return (
                     <motion.li
                       layout
-                      key={`${item.productId}-${item.size}`}
+                      key={`${item.productId}-${item.size}-${item.stamp?.id ?? 'nostamp'}-${item.stampFront?.id ?? 'nofront'}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: 30 }}
                       className="group flex gap-4 border-b border-white/5 pb-5"
                     >
-                      <div className="h-24 w-20 shrink-0 overflow-hidden bg-king-graphite">
+                      <div className="relative h-24 w-20 shrink-0 overflow-hidden bg-king-graphite">
                         <img
                           src={item.image}
                           alt={item.name}
                           className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
                         />
+                        {item.stampFront && (
+                          <span
+                            className="absolute left-1 top-1 flex h-8 w-8 items-center justify-center rounded-sm border border-white/25 bg-king-black/80"
+                            title={`Frente: ${item.stampFront.name}`}
+                          >
+                            <img
+                              src={item.stampFront.src}
+                              alt=""
+                              className={cn(
+                                'max-h-full max-w-full object-contain p-0.5',
+                                item.stampFront.id === FRONT_LOGO_PRETO_ID &&
+                                  kingLogoPretoOnDarkImgClass
+                              )}
+                            />
+                          </span>
+                        )}
+                        {item.stamp && (
+                          <span
+                            className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-sm border border-king-red/50 bg-king-black/80"
+                            title={`Costas: ${item.stamp.name}`}
+                          >
+                            <img
+                              src={item.stamp.src}
+                              alt=""
+                              className="max-h-full max-w-full object-contain"
+                            />
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-1 flex-col justify-between">
                         <div>
@@ -86,12 +119,28 @@ export default function CartDrawer() {
                           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70">
                             Tamanho {item.size}
                           </p>
+                          {item.stamp && (
+                            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.25em] text-king-red">
+                              Costas: {item.stamp.name}
+                            </p>
+                          )}
+                          {item.stampFront && (
+                            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+                              Frente: {item.stampFront.name}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center border border-white/10">
                             <button
                               onClick={() =>
-                                updateQty(item.productId, item.size, item.quantity - 1)
+                                updateQty(
+                                  item.productId,
+                                  item.size,
+                                  item.quantity - 1,
+                                  stampId,
+                                  stampFrontId
+                                )
                               }
                               className="px-2 py-1 text-king-silver hover:text-king-red"
                             >
@@ -102,7 +151,13 @@ export default function CartDrawer() {
                             </span>
                             <button
                               onClick={() =>
-                                updateQty(item.productId, item.size, item.quantity + 1)
+                                updateQty(
+                                  item.productId,
+                                  item.size,
+                                  item.quantity + 1,
+                                  stampId,
+                                  stampFrontId
+                                )
                               }
                               className="px-2 py-1 text-king-silver hover:text-king-red"
                             >
@@ -115,13 +170,16 @@ export default function CartDrawer() {
                         </div>
                       </div>
                       <button
-                        onClick={() => remove(item.productId, item.size)}
+                        onClick={() =>
+                          remove(item.productId, item.size, stampId, stampFrontId)
+                        }
                         className="self-start text-king-silver/50 hover:text-king-red"
                       >
                         <HiOutlineTrash />
                       </button>
                     </motion.li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>

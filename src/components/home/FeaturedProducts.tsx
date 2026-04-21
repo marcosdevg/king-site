@@ -24,14 +24,29 @@ export default function FeaturedProducts() {
       {/* Arte sacrada — faixa esquerda (~30%), opacidade baixa + entrada */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-[30%]"
+        className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-[min(88vw,22rem)] md:w-[30%]"
         initial={{ opacity: 0, x: -56, scale: 1.06 }}
         whileInView={{ opacity: 1, x: 0, scale: 1 }}
         viewport={{ once: true, amount: 0.25 }}
         transition={{ duration: 1.35, ease: [0.22, 1, 0.36, 1] }}
       >
+        {/* Mobile: faixa mais larga + zoom no rosto + opacidade maior */}
         <div
-          className="h-full w-full opacity-[0.11] md:opacity-[0.14]"
+          className="h-full w-full md:hidden opacity-[0.26]"
+          style={{
+            backgroundImage: `url(${jesus2Img})`,
+            backgroundSize: 'auto 118%',
+            backgroundPosition: '32% 38%',
+            backgroundRepeat: 'no-repeat',
+            maskImage:
+              'linear-gradient(90deg, black 0%, black 62%, rgba(0,0,0,0.45) 82%, transparent 100%)',
+            WebkitMaskImage:
+              'linear-gradient(90deg, black 0%, black 62%, rgba(0,0,0,0.45) 82%, transparent 100%)',
+          }}
+        />
+        {/* Desktop: composição original */}
+        <div
+          className="hidden h-full w-full md:block opacity-[0.14]"
           style={{
             backgroundImage: `url(${jesus2Img})`,
             backgroundSize: 'cover',
@@ -47,7 +62,7 @@ export default function FeaturedProducts() {
         <div className="mb-14 flex flex-col items-end justify-between gap-6 md:flex-row">
           <SectionHeading
             eyebrow="Em destaque"
-            title="PEÇAS CORINGAS"
+            title="COLEÇÃO CRUZ SACRA"
             subtitle="Selecionadas à mão. Tiragens limitadas. Reverência em cada ponto de costura."
           />
           <Link
@@ -59,11 +74,17 @@ export default function FeaturedProducts() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          {display.map((p, i) => (
-            <ProductCard key={p.id} product={p} index={i} />
-          ))}
-        </div>
+        {display.length === 0 ? (
+          <p className="py-8 text-center font-serif italic text-sm text-king-silver/60">
+          Sem novos produtos por enquanto.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+            {display.map((p, i) => (
+              <ProductCard key={p.id} product={p} index={i} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

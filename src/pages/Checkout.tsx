@@ -71,6 +71,8 @@ export default function Checkout() {
           image: i.image,
           size: i.size,
           quantity: i.quantity,
+          stamp: i.stamp ?? undefined,
+          stampFront: i.stampFront ?? undefined,
         })),
         subtotal: total,
         shippingCost,
@@ -229,7 +231,10 @@ export default function Checkout() {
             </h3>
             <ul className="mb-5 space-y-4 max-h-64 overflow-y-auto pr-2">
               {items.map((i) => (
-                <li key={`${i.productId}-${i.size}`} className="flex gap-3">
+                <li
+                  key={`${i.productId}-${i.size}-${i.stamp?.id ?? 'n'}-${i.stampFront?.id ?? 'nf'}`}
+                  className="flex gap-3"
+                >
                   <div className="h-16 w-14 overflow-hidden bg-king-graphite">
                     <img src={i.image} alt="" className="h-full w-full object-cover" />
                   </div>
@@ -240,6 +245,16 @@ export default function Checkout() {
                     <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/70">
                       {i.size} · {i.quantity}x
                     </span>
+                    {i.stamp && (
+                      <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-king-red/90">
+                        Costas: {i.stamp.name}
+                      </span>
+                    )}
+                    {i.stampFront && (
+                      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-king-silver/80">
+                        Frente: {i.stampFront.name}
+                      </span>
+                    )}
                     <span className="mt-auto font-display text-xs text-king-bone">
                       {formatBRL(i.price * i.quantity)}
                     </span>

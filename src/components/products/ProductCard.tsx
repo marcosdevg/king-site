@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { HiOutlineShoppingBag, HiOutlineEye } from 'react-icons/hi';
+import { HiOutlineShoppingCart, HiOutlineEye } from 'react-icons/hi';
 import type { Product } from '@/services/products.service';
 import { formatBRL } from '@/utils/format';
 import { useCartStore } from '@/store/useCartStore';
@@ -69,10 +69,13 @@ export default function ProductCard({ product, index = 0 }: Props) {
 
           <div className="absolute inset-x-3 bottom-3 z-10 flex translate-y-5 items-center gap-2 opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
             <button
+              type="button"
+              aria-label="Adicionar ao carrinho"
               onClick={quickAdd}
-              className="flex flex-1 items-center justify-center gap-2 bg-king-red/90 py-3 font-mono text-[10px] uppercase tracking-[0.3em] text-king-bone shadow-glow-red transition hover:bg-king-glow/95"
+              className="flex h-11 w-11 shrink-0 items-center justify-center gap-2 bg-king-red/90 font-mono text-[10px] uppercase tracking-[0.3em] text-king-bone shadow-glow-red transition hover:bg-king-glow/95 md:h-auto md:flex-1 md:py-3"
             >
-              <HiOutlineShoppingBag /> Add Rápido
+              <HiOutlineShoppingCart className="text-lg md:text-base" />
+              <span className="hidden md:inline">Add Rápido</span>
             </button>
             <button className="flex h-11 w-11 items-center justify-center bg-king-black/70 text-king-bone backdrop-blur-sm transition hover:bg-king-black">
               <HiOutlineEye />

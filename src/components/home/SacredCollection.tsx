@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { HiArrowNarrowRight } from 'react-icons/hi';
+import pombaWebp from '@/assets/pomba.webp';
 
 export default function SacredCollection() {
   return (
@@ -13,7 +14,7 @@ export default function SacredCollection() {
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="relative"
+          className="relative overflow-visible"
         >
           <div className="relative aspect-[4/5] overflow-hidden">
             <img
@@ -27,14 +28,29 @@ export default function SacredCollection() {
           <motion.div
             animate={{ y: [0, -10, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute -right-6 top-8 flex h-28 w-28 items-center justify-center rounded-full bg-king-red text-king-bone shadow-[0_0_28px_rgba(220,20,60,0.5),0_0_72px_rgba(220,20,60,0.22)]"
+            className="absolute -right-6 top-8 z-10 overflow-visible"
           >
-            <div className="text-center font-mono text-[10px] uppercase leading-tight tracking-[0.25em]">
-              LINHA
-              <br />
-              <span className="heading-display text-2xl font-bold tracking-normal">
-                SACRA
-              </span>
+            <div className="relative h-28 w-28 overflow-visible">
+              <img
+                src={pombaWebp}
+                alt=""
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 z-0 w-[min(20rem,72vw)] max-w-none object-contain opacity-[0.92]"
+                style={{
+                  bottom: '30%',
+                  transform: 'translateX(-50%) scale(0.9)',
+                  transformOrigin: 'bottom center',
+                }}
+              />
+              <div className="relative z-10 flex h-28 w-28 items-center justify-center rounded-full bg-king-red text-king-bone shadow-[0_0_28px_rgba(220,20,60,0.5),0_0_72px_rgba(220,20,60,0.22)]">
+                <div className="text-center font-mono text-[10px] uppercase leading-tight tracking-[0.25em]">
+                  LINHA
+                  <br />
+                  <span className="heading-display text-2xl font-bold tracking-normal">
+                    SACRA
+                  </span>
+                </div>
+              </div>
             </div>
           </motion.div>
         </motion.div>

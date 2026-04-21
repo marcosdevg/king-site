@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { HiOutlineAdjustments, HiOutlineX } from 'react-icons/hi';
 import ProductCard from '@/components/products/ProductCard';
 import SectionHeading from '@/components/ui/SectionHeading';
 import { useProductsStore } from '@/store/useProductsStore';
 import type { ProductCategory, ProductSize } from '@/services/products.service';
+import {
+  PRODUCT_CATEGORIES,
+  PRODUCT_CATEGORY_LABELS,
+  PRODUCT_CATEGORY_SHOP_LABELS,
+} from '@/config/productCategories';
 import { cn } from '@/utils/cn';
 
 const CATEGORIES: { id: ProductCategory | 'all'; label: string }[] = [
   { id: 'all', label: 'Todas' },
-  { id: 'oversized', label: 'Oversized' },
-  { id: 'camiseta', label: 'Camisetas' },
-  { id: 'moletom', label: 'Moletons' },
-  { id: 'regata', label: 'Regatas' },
-  { id: 'colecao-sacra', label: 'Linha Sagrada' },
+  ...PRODUCT_CATEGORIES.map((id) => ({
+    id,
+    label: PRODUCT_CATEGORY_SHOP_LABELS[id] ?? PRODUCT_CATEGORY_LABELS[id],
+  })),
 ];
 
 const SIZES: ProductSize[] = ['P', 'M', 'G', 'GG', 'XGG'];
@@ -92,7 +96,7 @@ export default function Products() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as typeof sort)}
-              className="bg-king-jet border border-white/10 px-3 py-2 font-mono text-[11px] uppercase tracking-[0.25em] text-king-bone focus:border-king-red outline-none"
+              className="select-king-dark font-mono text-[11px] uppercase tracking-[0.25em]"
             >
               <option value="recent">Mais recentes</option>
               <option value="price-asc">Menor preço</option>
@@ -150,11 +154,26 @@ export default function Products() {
         {!loading && filtered.length === 0 && (
           <div className="flex flex-col items-center gap-4 py-28 text-center">
             <p className="heading-display text-2xl text-king-bone">
-              Nenhuma peça por aqui
+              {products.length === 0 ? 'Coleção ainda vazia' : 'Nenhuma peça por aqui'}
             </p>
-            <p className="font-serif italic text-king-silver/70">
-              Tente outros filtros ou volte em breve — um novo drop está vindo.
+            <p className="max-w-md font-serif italic text-king-silver/70">
+              {products.length === 0 ? (
+                <>
+                  Nada cadastrado no Firebase. No painel Admin use &quot;Importar demonstrativos&quot; para
+                  criar as peças de exemplo (editáveis) ou cadastre suas próprias camisas.
+                </>
+              ) : (
+                <>Tente outros filtros ou volte em breve — um novo drop está vindo.</>
+              )}
             </p>
+            {products.length === 0 && (
+              <Link
+                to="/admin"
+                className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-red hover:underline"
+              >
+                Abrir painel admin →
+              </Link>
+            )}
           </div>
         )}
       </div>
