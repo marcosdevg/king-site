@@ -40,7 +40,13 @@ import {
   FRONT_LOGO_PRETO_ID,
   kingLogoPretoOnDarkImgClass,
 } from '@/assets/logos';
-import { listAllOrders, updateOrderStatus, type Order, type OrderStatus } from '@/services/orders.service';
+import {
+  listAllOrders,
+  updateOrderStatus,
+  updateOrderPaymentStatus,
+  type Order,
+  type OrderStatus,
+} from '@/services/orders.service';
 import { formatBRL } from '@/utils/format';
 import GlowButton from '@/components/ui/GlowButton';
 import KingLogo from '@/components/ui/KingLogo';
@@ -167,6 +173,16 @@ export default function Admin() {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     } catch {
       toast.error('Erro ao atualizar');
+    }
+  };
+
+  const onPaymentStatusChange = async (id: string, paymentStatus: Order['paymentStatus']) => {
+    try {
+      await updateOrderPaymentStatus(id, paymentStatus);
+      toast.success('Status de pagamento atualizado');
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, paymentStatus } : o)));
+    } catch {
+      toast.error('Erro ao atualizar pagamento');
     }
   };
 
@@ -350,7 +366,12 @@ export default function Admin() {
                 </p>
               ) : null}
               {ordersPageItems.map((o) => (
-                <OrderCard key={o.id} order={o} onStatusChange={onStatusChange} />
+                <OrderCard
+                  key={o.id}
+                  order={o}
+                  onStatusChange={onStatusChange}
+                  onPaymentStatusChange={onPaymentStatusChange}
+                />
               ))}
               <AdminPaginationBar
                 page={ordersPage}

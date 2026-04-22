@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -10,9 +10,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Crown, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
+import { Crown, ShoppingBag, TrendingUp, Wallet, Users, Copy, ExternalLink } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { Order } from '@/services/orders.service';
-import { formatBRL } from '@/utils/format';
+import { formatBRL, formatDate } from '@/utils/format';
+import { useThemeStore } from '@/store/useThemeStore';
 
 type Props = {
   orders: Order[];
@@ -52,11 +54,126 @@ function dayLabel(key: string): string {
   return `${dd}/${mm}`;
 }
 
+/** Vendas que entram em receita / gráficos: pagos e não cancelados nem reembolsados operacionalmente. */
+function isPaidSale(o: Order): boolean {
+  if (o.status === 'cancelado' || o.status === 'reembolsado') return false;
+  const ps = o.paymentStatus ?? 'paid';
+  return ps === 'paid';
+}
+
+/** Clientes para remarketing: falha no cartão, estorno na Stripe, pedido cancelado ou marcado reembolsado. */
+function isRemarketingLead(o: Order): boolean {
+  return (
+    o.status === 'cancelado' ||
+    o.status === 'reembolsado' ||
+    o.paymentStatus === 'refunded' ||
+    o.paymentStatus === 'failed'
+  );
+}
+
+function remarketingTags(o: Order): string[] {
+  const t: string[] = [];
+  if (o.paymentStatus === 'failed') t.push('Pagamento recusado');
+  if (o.paymentStatus === 'refunded') t.push('Estorno Stripe');
+  if (o.status === 'reembolsado') t.push('Reembolsado (pedido)');
+  if (o.status === 'cancelado') t.push('Pedido cancelado');
+  return t;
+}
+
+function onlyDigits(v: string): string {
+  return (v || '').replace(/\D/g, '');
+}
+
+function waDigits(phone: string): string {
+  const d = onlyDigits(phone);
+  if (d.length === 0) return '';
+  if (d.startsWith('55')) return d;
+  return `55${d}`;
+}
+
+function stripePaymentUrl(paymentIntentId: string): string {
+  return `https://dashboard.stripe.com/payments/${encodeURIComponent(paymentIntentId)}`;
+}
+
 export default function AdminKPIs({ orders }: Props) {
-  const paid = useMemo(
-    () => orders.filter((o) => o.paymentStatus === 'paid' || o.status !== 'cancelado'),
+  const siteTheme = useThemeStore((s) => s.theme);
+  const chart = useMemo(() => {
+    const light = siteTheme === 'light';
+    return {
+      grid: light ? 'rgba(28, 25, 23, 0.08)' : 'rgba(255,255,255,0.06)',
+      axisStroke: light ? 'rgba(28, 25, 23, 0.35)' : 'rgba(255,255,255,0.4)',
+      tickFill: light ? '#3d3429' : '#e8e4dc',
+      tooltipBg: light ? '#faf7f2' : '#0b0b0d',
+      tooltipBorder: light ? '1px solid rgba(28,25,23,0.14)' : '1px solid rgba(255,255,255,0.1)',
+      tooltipLabel: light ? '#1c1917' : '#eeeae2',
+      cursorFill: light ? 'rgba(193, 18, 31, 0.12)' : 'rgba(193, 18, 31, 0.1)',
+    };
+  }, [siteTheme]);
+
+  const tickProps = useMemo(
+    () => ({
+      fontSize: 10,
+      fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
+      fill: chart.tickFill,
+    }),
+    [chart.tickFill]
+  );
+
+  const paid = useMemo(() => orders.filter(isPaidSale), [orders]);
+
+  const remarketing = useMemo(() => {
+    return orders
+      .filter(isRemarketingLead)
+      .sort((a, b) => tsFromOrder(b) - tsFromOrder(a));
+  }, [orders]);
+
+  const remarketingStats = useMemo(
+    () => ({
+      failed: orders.filter((o) => o.paymentStatus === 'failed').length,
+      refunded: orders.filter((o) => o.paymentStatus === 'refunded').length,
+      cancelado: orders.filter((o) => o.status === 'cancelado').length,
+      reembolsado: orders.filter((o) => o.status === 'reembolsado').length,
+    }),
     [orders]
   );
+
+  const copyRemarketingEmails = useCallback(() => {
+    const text = remarketing
+      .map((o) => o.userEmail?.trim())
+      .filter(Boolean)
+      .join('; ');
+    if (!text) {
+      toast.error('Nenhum e-mail na lista');
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(() => toast.success('E-mails copiados'));
+  }, [remarketing]);
+
+  const copyRemarketingTable = useCallback(() => {
+    if (remarketing.length === 0) {
+      toast.error('Lista vazia');
+      return;
+    }
+    const head =
+      'Nome\tEmail\tTelefone\tCidade\tUF\tSituação\tValor\tData\tPedido\tPaymentIntent';
+    const rows = remarketing.map((o) =>
+      [
+        o.shipping.fullName,
+        o.userEmail,
+        o.shipping.phone,
+        o.shipping.city,
+        o.shipping.state,
+        remarketingTags(o).join(' | '),
+        o.total.toFixed(2).replace('.', ','),
+        formatDate(o.createdAt),
+        o.id,
+        o.paymentIntentId ?? '',
+      ].join('\t')
+    );
+    void navigator.clipboard.writeText([head, ...rows].join('\n')).then(() =>
+      toast.success('Tabela copiada (cole no Excel ou Sheets)')
+    );
+  }, [remarketing]);
 
   const { totalRevenue, totalOrders, totalItems, avgTicket } = useMemo(() => {
     const revenue = paid.reduce((acc, o) => acc + (o.total ?? 0), 0);
@@ -129,6 +246,8 @@ export default function AdminKPIs({ orders }: Props) {
         />
       </section>
 
+    
+
       <section className="glass p-5">
         <header className="mb-4 flex items-center justify-between">
           <div>
@@ -148,28 +267,31 @@ export default function AdminKPIs({ orders }: Props) {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailyData}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <CartesianGrid stroke={chart.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
-                  stroke="rgba(255,255,255,0.4)"
-                  tick={{ fontSize: 10, fontFamily: 'monospace' }}
+                  stroke={chart.axisStroke}
+                  tick={tickProps}
                 />
                 <YAxis
-                  stroke="rgba(255,255,255,0.4)"
-                  tick={{ fontSize: 10, fontFamily: 'monospace' }}
+                  stroke={chart.axisStroke}
+                  tick={tickProps}
                   tickFormatter={(v) =>
                     typeof v === 'number' ? `R$${Math.round(v)}` : String(v)
                   }
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(193,18,31,0.1)' }}
+                  cursor={{ fill: chart.cursorFill }}
                   contentStyle={{
-                    background: '#0b0b0d',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: chart.tooltipBg,
+                    border: chart.tooltipBorder,
                     borderRadius: 4,
-                    fontFamily: 'monospace',
+                    fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
                     fontSize: 11,
+                    color: chart.tooltipLabel,
                   }}
+                  labelStyle={{ color: chart.tooltipLabel }}
+                  itemStyle={{ color: chart.tooltipLabel }}
                   formatter={(v, name) => {
                     const n = typeof v === 'number' ? v : Number(v ?? 0);
                     return name === 'revenue'
@@ -213,28 +335,31 @@ export default function AdminKPIs({ orders }: Props) {
                 layout="vertical"
                 margin={{ left: 40, right: 20, top: 8, bottom: 8 }}
               >
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                <CartesianGrid stroke={chart.grid} horizontal={false} />
                 <XAxis
                   type="number"
-                  stroke="rgba(255,255,255,0.4)"
-                  tick={{ fontSize: 10, fontFamily: 'monospace' }}
+                  stroke={chart.axisStroke}
+                  tick={tickProps}
                 />
                 <YAxis
                   type="category"
                   dataKey="name"
                   width={140}
-                  stroke="rgba(255,255,255,0.5)"
-                  tick={{ fontSize: 10, fontFamily: 'monospace' }}
+                  stroke={chart.axisStroke}
+                  tick={{ ...tickProps, fontSize: 9 }}
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(193,18,31,0.1)' }}
+                  cursor={{ fill: chart.cursorFill }}
                   contentStyle={{
-                    background: '#0b0b0d',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: chart.tooltipBg,
+                    border: chart.tooltipBorder,
                     borderRadius: 4,
-                    fontFamily: 'monospace',
+                    fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
                     fontSize: 11,
+                    color: chart.tooltipLabel,
                   }}
+                  labelStyle={{ color: chart.tooltipLabel }}
+                  itemStyle={{ color: chart.tooltipLabel }}
                   formatter={(v, _name, item) => {
                     const n = typeof v === 'number' ? v : Number(v ?? 0);
                     const p = (item as { payload?: { revenue?: number } } | undefined)
@@ -247,6 +372,186 @@ export default function AdminKPIs({ orders }: Props) {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        )}
+      </section>
+
+
+      <section className="glass p-5">
+        <header className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Users className="mt-0.5 h-5 w-5 shrink-0 text-king-red" />
+            <div>
+              <h3 className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-red">
+                Remarketing — recusa, estorno, cancelamento
+              </h3>
+     
+              <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver/55">
+                Recusados: {remarketingStats.failed} · Estornos: {remarketingStats.refunded} ·
+                Cancelados: {remarketingStats.cancelado} · Reembolso (pedido): {remarketingStats.reembolsado} ·
+                Linhas: {remarketing.length}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={copyRemarketingEmails}
+              className="inline-flex items-center gap-2 border border-white/15 bg-white/[0.04] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver transition hover:border-king-red hover:text-king-fg"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copiar e-mails
+            </button>
+            <button
+              type="button"
+              onClick={copyRemarketingTable}
+              className="inline-flex items-center gap-2 border border-king-red/40 bg-king-red/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-king-red transition hover:bg-king-red hover:text-king-bone"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copiar tabela
+            </button>
+          </div>
+        </header>
+
+        {remarketing.length === 0 ? (
+          <p className="py-8 text-center font-serif italic text-king-silver/60">
+            Ainda não há nenhum pedido para remarketing.
+          </p>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[720px] text-left">
+                <thead>
+                  <tr className="border-b border-white/10 font-mono text-[9px] uppercase tracking-[0.28em] text-king-silver/70">
+                    <th className="pb-3 pr-3">Situação</th>
+                    <th className="pb-3 pr-3">Nome</th>
+                    <th className="pb-3 pr-3">E-mail</th>
+                    <th className="pb-3 pr-3">Telefone</th>
+                    <th className="pb-3 pr-3">Cidade</th>
+                    <th className="pb-3 pr-3">Valor</th>
+                    <th className="pb-3 pr-3">Data</th>
+                    <th className="pb-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono text-[11px] text-king-silver">
+                  {remarketing.map((o) => {
+                    const wa = waDigits(o.shipping.phone);
+                    const waUrl = wa
+                      ? `https://wa.me/${wa}?text=${encodeURIComponent(`Olá ${o.shipping.fullName}, aqui é da KING sobre seu pedido.`)}`
+                      : '';
+                    return (
+                      <tr key={o.id} className="border-b border-white/[0.06] align-top">
+                        <td className="py-3 pr-3">
+                          <div className="flex max-w-[14rem] flex-wrap gap-1">
+                            {remarketingTags(o).map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded border border-king-red/35 bg-king-red/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-king-red"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-3 text-king-fg">{o.shipping.fullName}</td>
+                        <td className="py-3 pr-3 break-all">{o.userEmail}</td>
+                        <td className="py-3 pr-3 whitespace-nowrap">{o.shipping.phone || '—'}</td>
+                        <td className="py-3 pr-3">
+                          {o.shipping.city} / {o.shipping.state}
+                        </td>
+                        <td className="py-3 pr-3 text-king-fg">{formatBRL(o.total)}</td>
+                        <td className="py-3 pr-3 whitespace-nowrap text-king-silver/80">
+                          {formatDate(o.createdAt)}
+                        </td>
+                        <td className="py-3">
+                          <div className="flex flex-wrap gap-2">
+                            {waUrl ? (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] uppercase tracking-[0.18em] text-emerald-400 underline-offset-2 hover:underline"
+                              >
+                                WhatsApp
+                              </a>
+                            ) : null}
+                            {o.paymentIntentId ? (
+                              <a
+                                href={stripePaymentUrl(o.paymentIntentId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-king-silver underline-offset-2 hover:text-king-fg hover:underline"
+                              >
+                                Stripe
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="space-y-4 md:hidden">
+              {remarketing.map((o) => {
+                const wa = waDigits(o.shipping.phone);
+                const waUrl = wa
+                  ? `https://wa.me/${wa}?text=${encodeURIComponent(`Olá ${o.shipping.fullName}, aqui é da KING sobre seu pedido.`)}`
+                  : '';
+                return (
+                  <li
+                    key={o.id}
+                    className="rounded border border-white/10 bg-king-black/40 p-4 font-mono text-[11px]"
+                  >
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {remarketingTags(o).map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded border border-king-red/35 bg-king-red/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-king-red"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="heading-display text-sm text-king-fg">{o.shipping.fullName}</p>
+                    <p className="mt-1 break-all text-king-silver/90">{o.userEmail}</p>
+                    <p className="mt-1 text-king-silver">{o.shipping.phone || '—'}</p>
+                    <p className="mt-1 text-king-silver/80">
+                      {o.shipping.city} / {o.shipping.state}
+                    </p>
+                    <p className="mt-2 text-king-fg">{formatBRL(o.total)}</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-king-silver/60">
+                      {formatDate(o.createdAt)}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {waUrl ? (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] uppercase tracking-[0.2em] text-emerald-400 underline"
+                        >
+                          WhatsApp
+                        </a>
+                      ) : null}
+                      {o.paymentIntentId ? (
+                        <a
+                          href={stripePaymentUrl(o.paymentIntentId)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-king-silver underline"
+                        >
+                          Stripe <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </section>
     </div>

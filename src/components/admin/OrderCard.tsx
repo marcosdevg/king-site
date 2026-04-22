@@ -33,9 +33,18 @@ function waPhone(phone: string): string {
 type Props = {
   order: Order;
   onStatusChange: (id: string, status: OrderStatus) => void;
+  /** Quando definido, permite alinhar o Firestore ao estorno/recusa na Stripe (remarketing nos KPIs). */
+  onPaymentStatusChange?: (id: string, paymentStatus: Order['paymentStatus']) => void;
 };
 
-export default function OrderCard({ order, onStatusChange }: Props) {
+const PAYMENT_STATUS_SELECT: { value: NonNullable<Order['paymentStatus']>; label: string }[] = [
+  { value: 'pending', label: 'Pagamento pendente' },
+  { value: 'paid', label: 'Pago' },
+  { value: 'failed', label: 'Recusado' },
+  { value: 'refunded', label: 'Estornado (Stripe)' },
+];
+
+export default function OrderCard({ order, onStatusChange, onPaymentStatusChange }: Props) {
   const [open, setOpen] = useState(false);
   const short = order.id.slice(0, 10).toUpperCase();
   const phone = waPhone(order.shipping.phone);
@@ -101,6 +110,25 @@ export default function OrderCard({ order, onStatusChange }: Props) {
               </option>
             ))}
           </select>
+          {onPaymentStatusChange && (
+            <select
+              value={order.paymentStatus ?? 'pending'}
+              onChange={(e) =>
+                onPaymentStatusChange(
+                  order.id,
+                  e.target.value as NonNullable<Order['paymentStatus']>
+                )
+              }
+              title="Alinhar com o painel Stripe (estorno, chargeback, falha)"
+              className="select-king-dark max-w-[11rem] font-mono text-[10px] uppercase tracking-[0.2em]"
+            >
+              {PAYMENT_STATUS_SELECT.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
           {whatsappUrl && (
             <a
               href={whatsappUrl}

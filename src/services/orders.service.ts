@@ -147,3 +147,10 @@ export async function listAllOrders(): Promise<Order[]> {
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   await updateDoc(doc(db, COLLECTION, orderId), { status });
 }
+
+export async function updateOrderPaymentStatus(
+  orderId: string,
+  paymentStatus: Order['paymentStatus']
+) {
+  await updateDoc(doc(db, COLLECTION, orderId), { paymentStatus });
+}

@@ -17,7 +17,7 @@ const IMAGES = [
   { src: reiMov01, label: 'Oversized Sacred Heart' },
   { src: reiMov02, label: 'Crown of Kings' },
   { src: reiMov03, label: 'Via Crucis' },
-  { src: reiMov04, label: 'Moletom Divino' },
+  { src: reiMov04, label: 'Divine Blood' },
 ] as const;
 
 const MARQUEE_LOGO_PAIRS = 14;
