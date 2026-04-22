@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -10,11 +10,14 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Crown, ShoppingBag, TrendingUp, Wallet, Users, Copy, ExternalLink } from 'lucide-react';
+import { Crown, ShoppingBag, TrendingUp, Wallet, Users, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import type { Order } from '@/services/orders.service';
 import { formatBRL, formatDate } from '@/utils/format';
 import { useThemeStore } from '@/store/useThemeStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { testN8nNotify } from '@/services/checkout.api';
 
 type Props = {
   orders: Order[];
@@ -96,6 +99,8 @@ function stripePaymentUrl(paymentIntentId: string): string {
 }
 
 export default function AdminKPIs({ orders }: Props) {
+  const user = useAuthStore((s) => s.user);
+  const [n8nTesting, setN8nTesting] = useState(false);
   const siteTheme = useThemeStore((s) => s.theme);
   const chart = useMemo(() => {
     const light = siteTheme === 'light';
@@ -148,6 +153,23 @@ export default function AdminKPIs({ orders }: Props) {
     }
     void navigator.clipboard.writeText(text).then(() => toast.success('E-mails copiados'));
   }, [remarketing]);
+
+  const pingN8nTest = useCallback(async () => {
+    if (!user) {
+      toast.error('Entre na conta admin para testar.');
+      return;
+    }
+    setN8nTesting(true);
+    try {
+      const token = await user.getIdToken();
+      await testN8nNotify(token);
+      toast.success('Teste enviado ao n8n. Confira o WhatsApp / execução no n8n.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao enviar teste');
+    } finally {
+      setN8nTesting(false);
+    }
+  }, [user]);
 
   const copyRemarketingTable = useCallback(() => {
     if (remarketing.length === 0) {
@@ -223,6 +245,23 @@ export default function AdminKPIs({ orders }: Props) {
 
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => void pingN8nTest()}
+          disabled={n8nTesting || !user}
+          title="Enviar evento de teste ao webhook n8n (simula venda → WhatsApp)"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-black shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {n8nTesting ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+          ) : (
+            <FaWhatsapp className="h-5 w-5" aria-hidden />
+          )}
+          <span className="sr-only">Testar notificação WhatsApp via n8n</span>
+        </button>
+      </div>
+
       <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <KpiCard
           icon={<Wallet className="h-4 w-4" />}

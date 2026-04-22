@@ -52,3 +52,20 @@ export function createPaymentIntent(payload: {
 }): Promise<CreatePaymentIntentResponse> {
   return post('/api/checkout/create-payment-intent', payload);
 }
+
+/** Admin: envia payload de teste ao n8n (mesmo formato do webhook de venda). */
+export async function testN8nNotify(idToken: string): Promise<{ ok: boolean }> {
+  const res = await fetch('/api/checkout/test-n8n-notify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: '{}',
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+  if (!res.ok) {
+    throw new Error(data.error ?? `HTTP ${res.status}`);
+  }
+  return { ok: Boolean(data.ok) };
+}
