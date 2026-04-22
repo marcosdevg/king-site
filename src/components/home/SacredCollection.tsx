@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { HiArrowNarrowRight } from 'react-icons/hi';
 import pombaWebp from '@/assets/pomba.webp';
+import sidredImg from '@/assets/sidred.png';
 
 export default function SacredCollection() {
   return (
@@ -18,12 +19,12 @@ export default function SacredCollection() {
         >
           <div className="relative aspect-[4/5] overflow-hidden">
             <img
-              src="https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=1400&q=80"
-              alt="Coleção sagrada"
-              className="h-full w-full object-cover"
+              src={sidredImg}
+              alt="Coleção sagrada — camiseta oversized bordô com estampa Via Crucis"
+              className="  object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-king-black via-transparent to-transparent" />
-            <div className="absolute inset-0 shadow-inner-glow" />
+            <div className="absolute inset-0 " />
           </div>
           <motion.div
             animate={{ y: [0, -10, 0] }}

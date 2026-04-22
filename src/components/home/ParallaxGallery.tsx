@@ -3,29 +3,22 @@ import { motion } from 'framer-motion';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { logoBordo, logoBranco, logoPreto } from '@/assets/logos';
+import reiMov01 from '@/assets/reiEmMovimento/DSC04530.jpg';
+import reiMov02 from '@/assets/reiEmMovimento/DSC04542.jpg';
+import reiMov03 from '@/assets/reiEmMovimento/DSC04545.jpg';
+import reiMov04 from '@/assets/reiEmMovimento/DSC04592.jpg';
 import { useThemeStore } from '@/store/useThemeStore';
 import { cn } from '@/utils/cn';
 
 gsap.registerPlugin(ScrollTrigger);
 
+/** URLs via import — o alias `@/` não funciona em strings de `src` no HTML. */
 const IMAGES = [
-  {
-    src: 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=1200&q=80',
-    label: 'Oversized Sacred Heart',
-  },
-  {
-    src: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=1200&q=80',
-    label: 'Crown of Kings',
-  },
-  {
-    src: 'https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=1200&q=80',
-    label: 'Via Crucis',
-  },
-  {
-    src: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80',
-    label: 'Moletom Divino',
-  },
-];
+  { src: reiMov01, label: 'Oversized Sacred Heart' },
+  { src: reiMov02, label: 'Crown of Kings' },
+  { src: reiMov03, label: 'Via Crucis' },
+  { src: reiMov04, label: 'Moletom Divino' },
+] as const;
 
 const MARQUEE_LOGO_PAIRS = 14;
 
