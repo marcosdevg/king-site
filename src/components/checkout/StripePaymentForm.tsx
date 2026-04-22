@@ -264,14 +264,19 @@ function InnerForm({
       <div
         className={cn(
           'flex flex-col gap-2 text-[10px] font-mono uppercase leading-snug tracking-[0.18em] sm:flex-row sm:flex-wrap sm:gap-4 sm:text-xs sm:tracking-[0.25em]',
-          theme === 'light' ? 'text-king-coal/75' : 'text-king-silver/70'
+          /** Tema claro: `king-coal` é cor de superfície clara no CSS — usar texto escuro (`fg` = ink). */
+          theme === 'light' ? 'text-king-fg/80' : 'text-king-silver/70'
         )}
       >
         <span className="flex items-center gap-2">
           <HiOutlineLockClosed /> Dados criptografados
         </span>
-     
-        <span className="flex items-center gap-2 opacity-70">
+        <span
+          className={cn(
+            'flex items-center gap-2',
+            theme === 'light' ? 'text-king-fg/65' : 'opacity-70'
+          )}
+        >
           PI: {paymentIntentId.slice(-6)}
         </span>
       </div>

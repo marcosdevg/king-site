@@ -243,7 +243,7 @@ export default function Navbar() {
             <div className="light-rays opacity-25" />
             <div className="flex items-center justify-between px-6 py-6">
               <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center">
-                <KingLogo variant="white" className="h-8 w-auto sm:h-9" />
+                <KingLogo variant="auto" className="h-8 w-auto sm:h-9" />
               </Link>
               <button
                 onClick={() => setMobileOpen(false)}

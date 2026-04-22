@@ -3,12 +3,14 @@ import { HiOutlineX, HiOutlinePlus, HiOutlineMinus, HiOutlineTrash } from 'react
 import { Link } from 'react-router-dom';
 import { useCartStore } from '@/store/useCartStore';
 import { FRONT_LOGO_PRETO_ID, kingLogoPretoOnDarkImgClass } from '@/assets/logos';
+import { useThemeStore } from '@/store/useThemeStore';
 import { cn } from '@/utils/cn';
 import { formatBRL } from '@/utils/format';
 import GlowButton from '@/components/ui/GlowButton';
 import KingLogo from '@/components/ui/KingLogo';
 
 export default function CartDrawer() {
+  const theme = useThemeStore((s) => s.theme);
   const { isOpen, close, items, updateQty, remove, subtotal } = useCartStore();
   const total = subtotal();
 
@@ -28,16 +30,29 @@ export default function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed right-0 top-0 z-[71] flex h-full w-full max-w-md flex-col bg-king-jet border-l border-white/5"
+            className={cn(
+              'fixed right-0 top-0 z-[71] flex h-full w-full max-w-md flex-col border-l bg-king-jet',
+              theme === 'light' ? 'border-king-coal/15' : 'border-white/5'
+            )}
           >
-            <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">
+            <div
+              className={cn(
+                'flex items-center justify-between px-6 py-5',
+                theme === 'light' ? 'border-b border-king-coal/15' : 'border-b border-white/5'
+              )}
+            >
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-red">
                   Sua sacola
                 </p>
                 <div className="mt-2 flex items-center gap-3">
-                  <KingLogo variant="white" className="h-6 w-auto" />
-                  <span className="heading-display text-xs tracking-[0.35em] text-king-silver/80">
+                  <KingLogo variant="auto" className="h-6 w-auto" />
+                  <span
+                    className={cn(
+                      'heading-display text-xs tracking-[0.35em]',
+                      theme === 'light' ? 'text-king-silver' : 'text-king-silver/80'
+                    )}
+                  >
                     CART
                   </span>
                 </div>

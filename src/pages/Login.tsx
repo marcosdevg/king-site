@@ -141,7 +141,7 @@ export function AuthLayout({
 
         <div className="mb-8 text-center">
           <div className="mb-5 flex justify-center">
-            <KingLogo variant="white" className="h-12 w-auto sm:h-14" />
+            <KingLogo variant="auto" className="h-12 w-auto sm:h-14" />
           </div>
           <h1 className="heading-display text-3xl text-king-fg">{title}</h1>
           <p className="mt-2 font-serif italic text-sm text-king-silver/70">
