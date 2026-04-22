@@ -140,7 +140,7 @@ export default function ParallaxGallery() {
               theme === 'light' ? 'text-gradient-red' : 'text-king-fg'
             )}
           >
-            FILHO DO REI EM MOVIMENTO
+            REI EM MOVIMENTO
           </h2>
         </motion.div>
 

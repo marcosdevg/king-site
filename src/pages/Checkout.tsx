@@ -1,15 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { HiOutlineLockClosed, HiOutlineShieldCheck } from 'react-icons/hi';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useCartStore } from '@/store/useCartStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { formatBRL } from '@/utils/format';
 import GlowButton from '@/components/ui/GlowButton';
-import { createOrder, type Shipping } from '@/services/orders.service';
-import { openWhatsApp, buildOrderMessage } from '@/utils/whatsapp';
+import {
+  createOrder,
+  type Shipping,
+  type ShippingService,
+} from '@/services/orders.service';
 import { cn } from '@/utils/cn';
+import ShippingQuoteBox from '@/components/checkout/ShippingQuoteBox';
+import StripePaymentForm from '@/components/checkout/StripePaymentForm';
+import PostCheckoutModal from '@/components/checkout/PostCheckoutModal';
+import type { ShippingOption } from '@/services/checkout.api';
 
 export default function Checkout() {
   const { items, subtotal, clear } = useCartStore();
@@ -17,7 +23,12 @@ export default function Checkout() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit' | 'boleto'>('pix');
+  const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
+  const [post, setPost] = useState<{
+    orderId: string;
+    total: number;
+    shippingName: string;
+  } | null>(null);
 
   const [shipping, setShipping] = useState<Shipping>({
     fullName: user?.displayName ?? '',
@@ -31,10 +42,23 @@ export default function Checkout() {
   });
 
   const total = subtotal();
-  const shippingCost = total >= 299 ? 0 : 29.9;
+  const shippingCost = selectedShipping?.price ?? 0;
   const final = total + shippingCost;
 
-  if (items.length === 0) {
+  const addressComplete = useMemo(() => {
+    const required: (keyof Shipping)[] = [
+      'fullName',
+      'phone',
+      'address',
+      'number',
+      'city',
+      'state',
+      'zip',
+    ];
+    return required.every((k) => !!(shipping[k] ?? '').trim());
+  }, [shipping]);
+
+  if (items.length === 0 && !post) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-king-black">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -53,14 +77,34 @@ export default function Checkout() {
   const onField = (k: keyof Shipping, v: string) =>
     setShipping((s) => ({ ...s, [k]: v }));
 
-  const finish = async () => {
+  const goPayment = () => {
     if (!user) {
       toast.error('Entre para finalizar');
       navigate('/login');
       return;
     }
+    if (!addressComplete) {
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+    if (!selectedShipping) {
+      toast.error('Calcule e selecione uma opção de frete');
+      return;
+    }
+    setStep(2);
+  };
+
+  const handlePaid = async (paymentIntentId: string) => {
+    if (!user || !selectedShipping) return;
     setSubmitting(true);
     try {
+      const shippingService: ShippingService = {
+        id: selectedShipping.id,
+        name: selectedShipping.name,
+        carrier: selectedShipping.carrier,
+        deliveryDays: selectedShipping.deliveryDays,
+        free: selectedShipping.free ?? false,
+      };
       const orderId = await createOrder({
         userId: user.uid,
         userEmail: user.email ?? '',
@@ -77,21 +121,32 @@ export default function Checkout() {
         subtotal: total,
         shippingCost,
         total: final,
-        status: 'pendente',
+        status: 'confirmado',
         shipping,
-        paymentMethod,
+        shippingService,
+        paymentMethod: 'card',
+        paymentIntentId,
+        paymentStatus: 'paid',
       });
 
       toast.success('Pedido confirmado! A realeza agradece.');
       clear();
-      openWhatsApp(buildOrderMessage(orderId, final, shipping.fullName));
-      navigate('/dashboard');
+      setPost({
+        orderId,
+        total: final,
+        shippingName: selectedShipping.name,
+      });
     } catch (err) {
       console.error(err);
-      toast.error('Erro ao criar o pedido. Tente novamente.');
+      toast.error('Pagamento aprovado mas não salvamos o pedido. Contate a KING.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const closePost = () => {
+    setPost(null);
+    navigate('/dashboard');
   };
 
   return (
@@ -107,12 +162,17 @@ export default function Checkout() {
           </h1>
         </div>
 
-        {/* Steps */}
         <div className="mb-10 flex items-center gap-4">
           {[1, 2].map((n) => (
             <button
               key={n}
-              onClick={() => setStep(n as 1 | 2)}
+              onClick={() => {
+                if (n === 2 && (!addressComplete || !selectedShipping)) {
+                  toast.error('Preencha o endereço e escolha o frete primeiro.');
+                  return;
+                }
+                setStep(n as 1 | 2);
+              }}
               className={cn(
                 'flex items-center gap-3 border px-4 py-2 font-mono text-[10px] uppercase tracking-[0.3em] transition',
                 step === n
@@ -140,21 +200,61 @@ export default function Checkout() {
                   Endereço de entrega
                 </h3>
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                  <Field label="Nome completo" value={shipping.fullName} onChange={(v) => onField('fullName', v)} />
-                  <Field label="Telefone" value={shipping.phone} onChange={(v) => onField('phone', v)} />
-                  <Field label="CEP" value={shipping.zip} onChange={(v) => onField('zip', v)} />
-                  <Field label="Cidade" value={shipping.city} onChange={(v) => onField('city', v)} />
-                  <Field label="Estado" value={shipping.state} onChange={(v) => onField('state', v)} />
-                  <Field label="Endereço" value={shipping.address} onChange={(v) => onField('address', v)} />
-                  <Field label="Número" value={shipping.number} onChange={(v) => onField('number', v)} />
+                  <Field
+                    label="Nome completo"
+                    value={shipping.fullName}
+                    onChange={(v) => onField('fullName', v)}
+                  />
+                  <Field
+                    label="Telefone"
+                    value={shipping.phone}
+                    onChange={(v) => onField('phone', v)}
+                  />
+                  <Field
+                    label="CEP"
+                    value={shipping.zip}
+                    onChange={(v) => onField('zip', maskCEP(v))}
+                    placeholder="00000-000"
+                  />
+                  <Field
+                    label="Cidade"
+                    value={shipping.city}
+                    onChange={(v) => onField('city', v)}
+                  />
+                  <Field
+                    label="Estado"
+                    value={shipping.state}
+                    onChange={(v) => onField('state', v.toUpperCase().slice(0, 2))}
+                    placeholder="SP"
+                  />
+                  <Field
+                    label="Endereço"
+                    value={shipping.address}
+                    onChange={(v) => onField('address', v)}
+                  />
+                  <Field
+                    label="Número"
+                    value={shipping.number}
+                    onChange={(v) => onField('number', v)}
+                  />
                   <Field
                     label="Complemento (opcional)"
                     value={shipping.complement ?? ''}
                     onChange={(v) => onField('complement', v)}
                   />
                 </div>
+
+                <div className="mt-8">
+                  <ShippingQuoteBox
+                    cep={shipping.zip}
+                    itemsCount={items.reduce((acc, i) => acc + i.quantity, 0)}
+                    selected={selectedShipping}
+                    onSelect={setSelectedShipping}
+                  />
+                </div>
+
                 <div className="mt-8 flex justify-end">
-                  <GlowButton onClick={() => setStep(2)}>Continuar para pagamento</GlowButton>
+                  <GlowButton onClick={goPayment}>Continuar para pagamento</GlowButton>
                 </div>
               </>
             )}
@@ -164,51 +264,20 @@ export default function Checkout() {
                 <h3 className="heading-display mb-6 text-xl text-king-fg">
                   Forma de pagamento
                 </h3>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  {(
-                    [
-                      { id: 'pix', label: 'PIX', desc: '5% de desconto' },
-                      { id: 'credit', label: 'Cartão', desc: 'Até 6x sem juros' },
-                      { id: 'boleto', label: 'Boleto', desc: 'Vence em 3 dias' },
-                    ] as const
-                  ).map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setPaymentMethod(p.id)}
-                      className={cn(
-                        'flex flex-col items-start gap-1 border p-4 text-left transition',
-                        paymentMethod === p.id
-                          ? 'border-king-red bg-king-red/5 shadow-glow-red'
-                          : 'border-white/10 hover:border-king-red'
-                      )}
-                    >
-                      <span className="heading-display text-sm tracking-[0.25em] text-king-fg">
-                        {p.label}
-                      </span>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/70">
-                        {p.desc}
-                      </span>
-                    </button>
-                  ))}
-                </div>
 
-                {paymentMethod === 'credit' && (
-                  <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
-                    <Field label="Nome no cartão" value="" onChange={() => {}} />
-                    <Field label="Número do cartão" value="" onChange={() => {}} placeholder="0000 0000 0000 0000" />
-                    <Field label="Validade" value="" onChange={() => {}} placeholder="MM/AA" />
-                    <Field label="CVV" value="" onChange={() => {}} placeholder="000" />
-                  </div>
-                )}
-
-                <div className="mt-8 flex flex-wrap gap-3 text-xs font-mono uppercase tracking-[0.25em] text-king-silver/70">
-                  <span className="flex items-center gap-2">
-                    <HiOutlineLockClosed /> Dados criptografados
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <HiOutlineShieldCheck /> Stripe-ready
-                  </span>
-                </div>
+                <StripePaymentForm
+                  subtotal={total}
+                  shippingCost={shippingCost}
+                  total={final}
+                  disabled={submitting}
+                  onPaid={handlePaid}
+                  metadata={{
+                    userEmail: user?.email ?? '',
+                    customer: shipping.fullName,
+                    shipping_service: selectedShipping?.name ?? '',
+                    shipping_zip: shipping.zip,
+                  }}
+                />
 
                 <div className="mt-8 flex justify-between">
                   <button
@@ -217,9 +286,6 @@ export default function Checkout() {
                   >
                     ← Voltar
                   </button>
-                  <GlowButton onClick={finish} disabled={submitting}>
-                    {submitting ? 'Processando...' : `Pagar ${formatBRL(final)}`}
-                  </GlowButton>
                 </div>
               </>
             )}
@@ -239,9 +305,7 @@ export default function Checkout() {
                     <img src={i.image} alt="" className="h-full w-full object-cover" />
                   </div>
                   <div className="flex flex-1 flex-col">
-                    <span className="heading-display text-xs text-king-fg">
-                      {i.name}
-                    </span>
+                    <span className="heading-display text-xs text-king-fg">{i.name}</span>
                     <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/70">
                       {i.size} · {i.quantity}x
                     </span>
@@ -269,8 +333,19 @@ export default function Checkout() {
               </div>
               <div className="flex justify-between">
                 <span>Frete</span>
-                <span>{shippingCost === 0 ? 'Grátis' : formatBRL(shippingCost)}</span>
+                <span>
+                  {selectedShipping
+                    ? shippingCost === 0
+                      ? 'Grátis'
+                      : formatBRL(shippingCost)
+                    : '—'}
+                </span>
               </div>
+              {selectedShipping && (
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/60">
+                  {selectedShipping.name} · {selectedShipping.deliveryDays}d
+                </p>
+              )}
             </div>
             <div className="mt-4 flex items-baseline justify-between">
               <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver">
@@ -283,8 +358,26 @@ export default function Checkout() {
           </aside>
         </div>
       </div>
+
+      <AnimatePresence>
+        {post && (
+          <PostCheckoutModal
+            orderId={post.orderId}
+            total={post.total}
+            shippingName={post.shippingName}
+            customerName={shipping.fullName}
+            onClose={closePost}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
+}
+
+function maskCEP(v: string): string {
+  const digits = v.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
 }
 
 function Field({

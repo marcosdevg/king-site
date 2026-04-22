@@ -33,7 +33,7 @@ export default function Footer() {
               theme === 'light' ? 'text-gradient-red' : 'text-king-fg'
             )}
           >
-            VISTA-SE COM O FILHO DO REI
+            VISTA-SE COM O REI
           </h3>
           <div className="mx-auto mt-6 h-px w-24 bg-gradient-to-r from-transparent via-king-red/40 to-transparent" />
         </motion.div>

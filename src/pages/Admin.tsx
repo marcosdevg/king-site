@@ -28,12 +28,14 @@ import { useStampsStore } from '@/store/useStampsStore';
 import { uploadProductGalleryImage } from '@/services/storage.service';
 import StampsTab from '@/components/admin/StampsTab';
 import AdminPaginationBar, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPaginationBar';
+import OrderCard from '@/components/admin/OrderCard';
+import AdminKPIs from '@/components/admin/AdminKPIs';
 import {
   FRONT_LOGO_PRETO_ID,
   kingLogoPretoOnDarkImgClass,
 } from '@/assets/logos';
 import { listAllOrders, updateOrderStatus, type Order, type OrderStatus } from '@/services/orders.service';
-import { formatBRL, formatDate } from '@/utils/format';
+import { formatBRL } from '@/utils/format';
 import GlowButton from '@/components/ui/GlowButton';
 import KingLogo from '@/components/ui/KingLogo';
 import { cn } from '@/utils/cn';
@@ -45,16 +47,10 @@ import {
 
 const ALL_SIZES: ProductSize[] = ['P', 'M', 'G', 'GG', 'XGG'];
 
-const STATUS_OPTIONS: OrderStatus[] = [
-  'pendente',
-  'confirmado',
-  'enviado',
-  'entregue',
-  'cancelado',
-];
+type AdminTab = 'products' | 'orders' | 'kpis' | 'stamps';
 
 export default function Admin() {
-  const [tab, setTab] = useState<'products' | 'orders' | 'stamps'>('products');
+  const [tab, setTab] = useState<AdminTab>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +130,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (tab === 'products') loadProducts();
-    else if (tab === 'orders') loadOrders();
+    else if (tab === 'orders' || tab === 'kpis') loadOrders();
   }, [tab]);
 
   const onDelete = async (id: string) => {
@@ -182,7 +178,7 @@ export default function Admin() {
         </motion.div>
 
         <div className="mb-8 flex flex-wrap gap-2">
-          {(['products', 'orders', 'stamps'] as const).map((t) => (
+          {(['products', 'orders', 'kpis', 'stamps'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -193,13 +189,27 @@ export default function Admin() {
                   : 'border-white/10 text-king-silver hover:border-king-red'
               )}
             >
-              {t === 'products' ? 'Produtos' : t === 'orders' ? 'Pedidos' : 'Estampas'}
+              {t === 'products'
+                ? 'Produtos'
+                : t === 'orders'
+                  ? 'Pedidos'
+                  : t === 'kpis'
+                    ? 'KPIs'
+                    : 'Estampas'}
             </button>
           ))}
         </div>
 
         {tab === 'stamps' ? (
           <StampsTab />
+        ) : tab === 'kpis' ? (
+          loading ? (
+            <div className="flex justify-center py-20">
+              <div className="spinner-crown" />
+            </div>
+          ) : (
+            <AdminKPIs orders={orders} />
+          )
         ) : loading ? (
           <div className="flex justify-center py-20">
             <div className="spinner-crown" />
@@ -308,38 +318,7 @@ export default function Admin() {
               </p>
             )}
             {ordersPageItems.map((o) => (
-              <motion.div
-                key={o.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver">
-                    #{o.id.slice(0, 10)}
-                  </p>
-                  <p className="heading-display text-base text-king-fg">
-                    {o.shipping.fullName}
-                  </p>
-                  <p className="font-serif italic text-xs text-king-silver/70">
-                    {o.userEmail} · {formatDate(o.createdAt)}
-                  </p>
-                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/70">
-                    {o.items.length} itens · {formatBRL(o.total)} · {o.paymentMethod.toUpperCase()}
-                  </p>
-                </div>
-                <select
-                  value={o.status}
-                  onChange={(e) => onStatusChange(o.id, e.target.value as OrderStatus)}
-                  className="select-king-dark font-mono text-[11px] uppercase tracking-[0.25em]"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </motion.div>
+              <OrderCard key={o.id} order={o} onStatusChange={onStatusChange} />
             ))}
             <AdminPaginationBar
               page={ordersPage}

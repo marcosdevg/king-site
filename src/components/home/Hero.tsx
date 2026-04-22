@@ -46,7 +46,7 @@ export default function Hero() {
             transition={{ delay: 0.55, duration: 1, ease: [0.22, 1, 0.36, 1] }}
             className="block text-gradient-red text-glow"
           >
-            COM O FILHO DO REI
+            COM O REI
           </motion.span>
         </h1>
 

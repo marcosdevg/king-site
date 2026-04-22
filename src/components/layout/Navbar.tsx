@@ -296,7 +296,7 @@ export default function Navbar() {
               )}
             </nav>
             <p className="px-8 pb-10 font-serif italic text-sm text-king-silver/60">
-              Vista-se com o Filho do Rei.
+              Vista-se com o Rei.
             </p>
           </motion.div>
         )}

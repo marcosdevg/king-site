@@ -23,7 +23,7 @@ export default function Register() {
     setLoading(true);
     try {
       await registerWithEmail(email, password, name);
-      toast.success('Conta criada. Vista-se com o Filho do Rei.');
+      toast.success('Conta criada. Vista-se com o Rei.');
       navigate('/');
     } catch (err) {
       const msg = (err as { code?: string })?.code ?? '';

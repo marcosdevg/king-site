@@ -47,6 +47,16 @@ export interface Shipping {
   zip: string;
 }
 
+export type PaymentMethod = 'card' | 'pix' | 'boleto';
+
+export interface ShippingService {
+  id: string;
+  name: string;
+  carrier: string;
+  deliveryDays: number;
+  free?: boolean;
+}
+
 export interface Order {
   id: string;
   userId: string;
@@ -57,7 +67,10 @@ export interface Order {
   total: number;
   status: OrderStatus;
   shipping: Shipping;
-  paymentMethod: 'pix' | 'credit' | 'boleto';
+  shippingService?: ShippingService | null;
+  paymentMethod: PaymentMethod;
+  paymentIntentId?: string | null;
+  paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
   createdAt?: unknown;
 }
 
