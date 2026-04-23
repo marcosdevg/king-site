@@ -205,12 +205,12 @@ export default function ProductDetail() {
   };
 
   return (
-    <main className="relative bg-king-black py-16">
+    <main className="relative bg-king-black py-8 md:py-16">
       <div className="light-rays opacity-20" />
       <div className="container-king relative">
         <Link
           to="/produtos"
-          className="mb-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver hover:text-king-red"
+          className="mb-4 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver hover:text-king-red md:mb-8 md:text-[11px] md:tracking-[0.3em]"
         >
           <HiArrowNarrowLeft /> Voltar à coleção
         </Link>
@@ -260,7 +260,7 @@ export default function ProductDetail() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-12 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-12">
           {/* Gallery */}
           <div className={cn(currentStepKey !== 'info' && 'hidden md:block')}>
             <motion.div
@@ -317,35 +317,35 @@ export default function ProductDetail() {
                 </span>
               )}
 
-              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver">
+              <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver md:mt-4 md:text-[11px] md:tracking-[0.3em]">
                 {product.category.replace('-', ' ')}
               </p>
 
-              <h1 className="mt-2 heading-display text-4xl md:text-6xl leading-[0.95] text-king-fg">
+              <h1 className="mt-1 heading-display text-2xl leading-[0.95] text-king-fg md:mt-2 md:text-6xl">
                 {product.name}
               </h1>
 
-              <div className="mt-6 flex items-baseline gap-4">
-                <span className="heading-display text-3xl text-king-fg">
+              <div className="mt-3 flex items-baseline gap-3 md:mt-6 md:gap-4">
+                <span className="heading-display text-xl text-king-fg md:text-3xl">
                   {formatBRL(product.price)}
                 </span>
                 {product.oldPrice && (
-                  <span className="font-mono text-sm text-king-silver/50 line-through">
+                  <span className="font-mono text-xs text-king-silver/50 line-through md:text-sm">
                     {formatBRL(product.oldPrice)}
                   </span>
                 )}
               </div>
-              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.25em] text-king-silver/70">
+              <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.22em] text-king-silver/70 md:text-[11px] md:tracking-[0.25em]">
                 Em até 6x de {formatBRL(product.price / 6)} sem juros
               </p>
 
-              <div className="my-8 h-px w-full bg-gradient-to-r from-king-red/22 to-transparent" />
+              <div className="my-4 h-px w-full bg-gradient-to-r from-king-red/22 to-transparent md:my-8" />
 
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
-                className="font-serif text-base leading-relaxed text-king-silver/90 md:text-lg"
+                className="font-serif text-sm leading-relaxed text-king-silver/90 md:text-lg"
               >
                 {product.description}
               </motion.p>
@@ -495,29 +495,29 @@ export default function ProductDetail() {
                 currentStepKey !== 'info' && 'hidden md:block'
               )}
             >
-              <div className="mt-8">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver">
+              <div className="mt-5 md:mt-8">
+                <div className="mb-2 flex items-center justify-between md:mb-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver md:text-[11px] md:tracking-[0.3em]">
                     Tamanho
                   </p>
                   <button
                     type="button"
                     onClick={() => setMeasureGuideOpen(true)}
-                    className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-red hover:underline"
+                    className="font-mono text-[10px] uppercase tracking-[0.28em] text-king-red hover:underline md:text-[11px] md:tracking-[0.3em]"
                   >
                     Guia de medidas
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 md:gap-2">
                   {product.sizes.map((s) => (
                     <button
                       key={s}
                       onClick={() => setSize(s)}
                       className={cn(
-                        'h-12 min-w-[52px] border px-4 font-mono text-sm uppercase tracking-[0.25em] transition',
+                        'h-9 min-w-[40px] border px-3 font-mono text-xs uppercase tracking-[0.2em] transition md:h-12 md:min-w-[52px] md:px-4 md:text-sm md:tracking-[0.25em]',
                         size === s
                           ? 'border-king-red bg-king-red text-king-bone shadow-glow-red'
-                          : 'border-white/15 text-king-silver hover:border-king-red hover:text-king-fg'
+                          : 'border-white/15 text-king-silver [html.light_&]:border-king-ink/25 [html.light_&]:text-king-ink/80 hover:border-king-red hover:text-king-fg [html.light_&]:hover:border-king-red [html.light_&]:hover:text-king-ink'
                       )}
                     >
                       {s}
@@ -526,23 +526,23 @@ export default function ProductDetail() {
                 </div>
               </div>
 
-              <div className="mt-6">
-                <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-king-silver">
+              <div className="mt-4 md:mt-6">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver md:mb-3 md:text-[11px] md:tracking-[0.3em]">
                   Quantidade
                 </p>
-                <div className="inline-flex items-center border border-white/15">
+                <div className="inline-flex items-center border border-white/15 [html.light_&]:border-king-ink/25">
                   <button
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    className="h-11 w-11 text-king-silver hover:text-king-red"
+                    className="h-9 w-9 text-king-silver hover:text-king-red md:h-11 md:w-11 [html.light_&]:text-king-ink/70 [html.light_&]:hover:text-king-red"
                   >
                     −
                   </button>
-                  <span className="min-w-[52px] text-center font-display text-base text-king-fg">
+                  <span className="min-w-[40px] text-center font-display text-sm text-king-fg md:min-w-[52px] md:text-base">
                     {quantity}
                   </span>
                   <button
                     onClick={() => setQuantity((q) => q + 1)}
-                    className="h-11 w-11 text-king-silver hover:text-king-red"
+                    className="h-9 w-9 text-king-silver hover:text-king-red md:h-11 md:w-11 [html.light_&]:text-king-ink/70 [html.light_&]:hover:text-king-red"
                   >
                     +
                   </button>
@@ -567,7 +567,7 @@ export default function ProductDetail() {
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.9 }}
-                className="flex h-14 w-14 items-center justify-center border border-white/15 text-king-silver transition hover:border-king-red hover:text-king-red"
+                className="flex h-14 w-14 items-center justify-center border border-white/15 text-king-silver transition hover:border-king-red hover:text-king-red [html.light_&]:border-king-ink/25 [html.light_&]:text-king-ink/70"
                 aria-label="Favoritar"
               >
                 <HiOutlineHeart className="text-lg" />

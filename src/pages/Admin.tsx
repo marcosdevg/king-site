@@ -489,9 +489,13 @@ function ProductModal({
 
   const [wizardStep, setWizardStep] = useState<ProductWizardStep>(1);
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -502,7 +506,7 @@ function ProductModal({
       document.body.style.overflow = prevOverflow;
       getLenisRoot()?.start();
     };
-  }, [onClose]);
+  }, []);
 
   const set = <K extends keyof ProductInput>(k: K, v: ProductInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
