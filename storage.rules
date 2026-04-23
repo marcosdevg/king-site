@@ -1,20 +1,68 @@
 rules_version = '2';
-// Publique no Firebase Console → Storage → Regras (ou use `firebase deploy --only storage`).
-// Ajuste o e-mail se mudar o admin.
+
+// KING Oversized — Storage Security Rules
+// Deploy: firebase deploy --only storage
+//        (ou copie este conteúdo no Firebase Console → Storage → Regras)
+//
+// Admin: quem tiver email == kingoversized@gmail.com em auth.token.email.
+// Qualquer path fora dos blocos abaixo é automaticamente negado.
+
 service firebase.storage {
   match /b/{bucket}/o {
-    match /products/gallery/{userId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null
-        && request.auth.uid == userId
+
+    // =========================================================
+    // Helpers
+    // =========================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn()
         && request.auth.token.email == "kingoversized@gmail.com";
     }
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    function underMaxSize() {
+      // 8 MB — bate com o limite do uploader no Admin.
+      return request.resource.size < 8 * 1024 * 1024;
+    }
 
-    match /stamps/{side}/{userId}/{allPaths=**} {
+    // =========================================================
+    // PRODUTOS — galeria (capa e fotos do produto)
+    // Path: products/gallery/{userId}/{arquivo}
+    // Leitura pública; upload só do admin no próprio uid.
+    // =========================================================
+    match /products/gallery/{userId}/{fileName=**} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.auth.uid == userId
-        && request.auth.token.email == "kingoversized@gmail.com";
+      allow create, update: if isAdmin()
+                            && request.auth.uid == userId
+                            && isImage()
+                            && underMaxSize();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================
+    // ESTAMPAS — costas e frente
+    // Path: stamps/{side}/{userId}/{arquivo}
+    // side ∈ {back, front}
+    // Leitura pública; upload só do admin no próprio uid.
+    // =========================================================
+    match /stamps/{side}/{userId}/{fileName=**} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+                            && request.auth.uid == userId
+                            && (side == 'back' || side == 'front')
+                            && isImage()
+                            && underMaxSize();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================
+    // Catch-all — nega qualquer path fora dos escopos acima.
+    // =========================================================
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

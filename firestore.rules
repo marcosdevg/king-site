@@ -1,61 +1,141 @@
 rules_version = '2';
-// Regras de exemplo para o Firestore — ajuste no console do Firebase.
-// Admin: apenas quem tiver email == kingoversized@gmail.com pode escrever em /products.
+
+// KING Oversized — Firestore Security Rules
+// Deploy: firebase deploy --only firestore:rules
+//        (ou copie este conteúdo no Firebase Console → Firestore → Regras)
+//
+// Admin: quem tiver email == kingoversized@gmail.com em auth.token.email.
+// Qualquer coleção não listada abaixo é automaticamente negada.
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // =========================================================
+    // Helpers
+    // =========================================================
     function isSignedIn() {
       return request.auth != null;
     }
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == "kingoversized@gmail.com";
+      return isSignedIn()
+        && request.auth.token.email == "kingoversized@gmail.com";
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function incoming() { return request.resource.data; }
+    function current()  { return resource.data; }
+    function changedKeys() {
+      return incoming().diff(current()).affectedKeys();
+    }
+    function hasOnly(keys) {
+      return changedKeys().hasOnly(keys);
+    }
+    function isString(v) { return v is string; }
+    function isNum(v)    { return v is number; }
+    function isBool(v)   { return v is bool; }
+    function isList(v)   { return v is list; }
+    function isMap(v)    { return v is map; }
+
+    // =========================================================
+    // USERS — cada autenticado lê/escreve só o próprio doc
+    // =========================================================
+    match /users/{userId} {
+      allow read:   if isSelf(userId) || isAdmin();
+      allow create: if isSelf(userId)
+                    && incoming().keys().hasOnly([
+                         'uid','email','displayName','photoURL','createdAt','updatedAt'
+                       ]);
+      allow update: if isSelf(userId)
+                    // bloqueia alteração de uid/email após criação
+                    && !changedKeys().hasAny(['uid','email']);
+      allow delete: if false; // remoção só pelo console / Cloud Function
     }
 
-    // Produtos — leitura pública; escrita apenas do admin
+    // =========================================================
+    // PRODUCTS — leitura pública; CRUD só admin
+    // =========================================================
     match /products/{productId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
 
-    // Usuários — cada um lê/escreve seu próprio doc
-    match /users/{userId} {
-      allow read: if isSignedIn() && request.auth.uid == userId;
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && request.auth.uid == userId;
-      allow delete: if false;
-    }
+      allow create: if isAdmin()
+                    && isString(incoming().name)
+                    && isNum(incoming().price)
+                    && incoming().price >= 0
+                    && isList(incoming().images);
 
-    // Pedidos — o usuário cria/lê os próprios; admin vê tudo
-    match /orders/{orderId} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Estampas (costas/frente) — leitura pública na loja; CRUD só admin
+    // =========================================================
+    // ORDERS — usuário cria/lê os próprios; admin tudo
+    // =========================================================
+    match /orders/{orderId} {
+      // Cria ao finalizar checkout. userId precisa bater com auth.uid.
+      allow create: if isSignedIn()
+                    && incoming().userId == request.auth.uid
+                    && isString(incoming().userEmail)
+                    && isList(incoming().items)
+                    && isNum(incoming().total)
+                    && incoming().total >= 0
+                    && isString(incoming().status)
+                    && isMap(incoming().shipping);
+
+      allow read:   if isAdmin()
+                    || (isSignedIn() && current().userId == request.auth.uid);
+
+      // Usuário dono nunca altera pedido após criação; só admin.
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================
+    // STAMPS — leitura pública; CRUD só admin
+    // =========================================================
     match /stamps/{stampId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // Cupons — leitura pública (checkout valida), CRUD só admin.
-    // Usuário logado pode incrementar usedCount ao finalizar pagamento.
+    // =========================================================
+    // COUPONS — leitura pública (checkout valida cupom).
+    // CRUD só admin. Usuário logado pode incrementar usedCount
+    // em +1 (e nada mais) ao finalizar pagamento.
+    // =========================================================
     match /coupons/{couponId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (
-        isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount'])
-        && request.resource.data.usedCount == resource.data.usedCount + 1
-      );
+
+      allow create: if isAdmin()
+                    && isString(incoming().code)
+                    && isNum(incoming().discountPercent);
+      allow delete: if isAdmin();
+
+      allow update: if isAdmin()
+                    || (
+                      isSignedIn()
+                      && hasOnly(['usedCount'])
+                      && isNum(incoming().usedCount)
+                      && incoming().usedCount == current().usedCount + 1
+                    );
     }
 
-    // Leads — qualquer um pode criar (formulário de WhatsApp no site).
-    // Leitura/remoção somente admin.
+    // =========================================================
+    // LEADS — qualquer visitante cria (form de WhatsApp na home).
+    // Admin lista/remove.
+    // =========================================================
     match /leads/{leadId} {
-      allow create: if true;
-      allow read, delete: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if isString(incoming().phoneDigits)
+                    && incoming().phoneDigits.size() >= 10
+                    && incoming().phoneDigits.size() <= 13;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // =========================================================
+    // Catch-all — qualquer coleção não listada acima é bloqueada.
+    // =========================================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
