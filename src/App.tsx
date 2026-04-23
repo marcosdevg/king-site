@@ -32,6 +32,7 @@ import AdminRoute from '@/components/auth/AdminRoute';
 import bendoFloat from '@/assets/bendo.png';
 import { HiOutlineDownload } from 'react-icons/hi';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { useFreezeRecovery } from '@/hooks/useFreezeRecovery';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ function App() {
   const theme = useThemeStore((s) => s.theme);
   const fetchStamps = useStampsStore((s) => s.fetch);
   const pwa = usePWAInstall();
+  useFreezeRecovery();
 
   useEffect(() => {
     const unsub = initAuth();

@@ -20,15 +20,19 @@ export default function CustomCursor() {
     };
 
     const animate = () => {
-      dx += (tx - dx) * 0.6;
-      dy += (ty - dy) * 0.6;
-      rx += (tx - rx) * 0.18;
-      ry += (ty - ry) * 0.18;
-      if (dot) {
-        dot.style.transform = `translate3d(${dx}px, ${dy}px, 0) translate(-50%, -50%)`;
-      }
-      if (ring) {
-        ring.style.transform = `translate3d(${rx}px, ${ry}px, 0) translate(-50%, -50%)`;
+      try {
+        dx += (tx - dx) * 0.6;
+        dy += (ty - dy) * 0.6;
+        rx += (tx - rx) * 0.18;
+        ry += (ty - ry) * 0.18;
+        if (dot) {
+          dot.style.transform = `translate3d(${dx}px, ${dy}px, 0) translate(-50%, -50%)`;
+        }
+        if (ring) {
+          ring.style.transform = `translate3d(${rx}px, ${ry}px, 0) translate(-50%, -50%)`;
+        }
+      } catch {
+        // swallow — never let the cursor crash the render loop
       }
       raf = requestAnimationFrame(animate);
     };
@@ -54,11 +58,27 @@ export default function CustomCursor() {
     document.addEventListener('mouseover', over);
     document.addEventListener('mouseout', out);
 
+    const onFocus = () => {
+      // Kick the RAF back if window focus stalled it.
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(animate);
+    };
+    const onUnfreeze = () => {
+      dot.classList.remove('hovering');
+      ring.classList.remove('hovering');
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(animate);
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('king:unfreeze', onUnfreeze);
+
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('mousemove', move);
       document.removeEventListener('mouseover', over);
       document.removeEventListener('mouseout', out);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('king:unfreeze', onUnfreeze);
     };
   }, []);
 
