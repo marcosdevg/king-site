@@ -65,6 +65,13 @@
     overflow: hidden;
   }
 
+  /* Defensive: a fully transparent fixed overlay should never block clicks.
+     Catches framer-motion ghosts that fail to unmount after exit. */
+  [style*="opacity: 0;"][class*="fixed"],
+  [style*="opacity:0;"][class*="fixed"] {
+    pointer-events: none !important;
+  }
+
   ::selection {
     background: rgba(220, 20, 60, 0.22);
     color: #faf7f0;
