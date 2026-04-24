@@ -445,42 +445,20 @@ export default function ProductDetail() {
                 </p>
               ) : (
                 <>
-                  {/* Desktop: grid com scroll interno */}
-                  <div
-                    data-lenis-prevent
-                    className="mt-3 hidden max-h-80 overflow-y-auto overscroll-y-contain rounded-md border border-white/10 bg-king-black/40 p-3 [html.light_&]:border-king-ink/15 [html.light_&]:bg-king-ink/5 md:block"
-                  >
-                    <div className="grid grid-cols-4 gap-3">
-                      {backOptions.map((opt) => {
-                        const active = stamp?.id === opt.id;
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => setStamp(active ? null : opt)}
-                            className={cn(
-                              'group flex flex-col items-center gap-1.5 overflow-hidden rounded-md border p-2 transition',
-                              active
-                                ? 'border-king-red bg-king-red/[0.08] ring-1 ring-king-red/40'
-                                : 'border-white/10 bg-king-black/30 hover:border-king-red/50 [html.light_&]:border-king-ink/15 [html.light_&]:bg-white'
-                            )}
-                            title={opt.name}
-                          >
-                            <div className="flex h-20 w-full items-center justify-center">
-                              <img
-                                src={opt.src}
-                                alt={opt.name}
-                                loading="lazy"
-                                className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-[1.04]"
-                              />
-                            </div>
-                            <span className="line-clamp-2 w-full text-center font-mono text-[9px] uppercase leading-tight tracking-[0.18em] text-king-silver">
-                              {opt.name}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  {/* Desktop: carrossel 4 por página */}
+                  <div className="mt-3 hidden md:block">
+                    <StampCarousel
+                      items={backOptions.map((o) => ({ id: o.id, name: o.name, src: o.src }))}
+                      selectedId={stamp?.id ?? null}
+                      onSelect={(picked) => {
+                        if (!picked) return setStamp(null);
+                        const target = backOptions.find((o) => o.id === picked.id);
+                        if (!target) return;
+                        setStamp(stamp?.id === target.id ? null : target);
+                      }}
+                      pageSize={4}
+                      thumbHeightClass="h-20"
+                    />
                   </div>
 
                   {/* Mobile: carrossel 3 por página + preview embaixo */}
@@ -532,45 +510,26 @@ export default function ProductDetail() {
                 )}
               </div>
 
-              {/* Desktop: grid normal */}
-              <div
-                className={cn(
-                  'mt-3 hidden gap-3 md:grid',
-                  frontOptions.length === 1 && 'grid-cols-1',
-                  frontOptions.length === 2 && 'grid-cols-2',
-                  frontOptions.length >= 3 && 'grid-cols-3'
-                )}
-              >
-                {frontOptions.map((opt) => {
-                  const active = stampFront?.id === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setStampFront(opt)}
-                      className={cn(
-                        'flex flex-col items-center gap-2 rounded-xl border bg-king-black/40 p-3 transition md:p-4',
-                        active
-                          ? 'border-king-red bg-king-red/[0.08]'
-                          : 'border-white/10 hover:border-king-red/50'
-                      )}
-                    >
-                      <div className="flex h-14 w-full items-center justify-center md:h-16">
-                        <img
-                          src={opt.src}
-                          alt={opt.name}
-                          className={cn(
-                            'max-h-full max-w-[88%] object-contain',
-                            opt.id === FRONT_LOGO_PRETO_ID && kingLogoPretoOnDarkImgClass
-                          )}
-                        />
-                      </div>
-                      <span className="text-center font-mono text-[9px] uppercase leading-tight tracking-[0.18em] text-king-silver">
-                        {opt.name.replace(/^KING · /, '')}
-                      </span>
-                    </button>
-                  );
-                })}
+              {/* Desktop: carrossel 3 por página */}
+              <div className="mt-3 hidden md:block">
+                <StampCarousel
+                  items={frontOptions.map((o) => ({
+                    id: o.id,
+                    name: o.name.replace(/^KING · /, ''),
+                    src: o.src,
+                    imgExtraClass: o.id === FRONT_LOGO_PRETO_ID ? kingLogoPretoOnDarkImgClass : undefined,
+                  }))}
+                  selectedId={stampFront?.id ?? null}
+                  onSelect={(picked) => {
+                    if (!picked) return setStampFront(null);
+                    const target = frontOptions.find((o) => o.id === picked.id);
+                    if (!target) return;
+                    setStampFront(stampFront?.id === target.id ? null : target);
+                  }}
+                  pageSize={3}
+                  thumbHeightClass="h-16"
+                  tileClassName="rounded-xl p-4"
+                />
               </div>
 
               {/* Mobile: carrossel 2 por página + preview combinado embaixo */}
@@ -803,11 +762,15 @@ function StampCarousel({
   selectedId,
   onSelect,
   pageSize,
+  thumbHeightClass = 'h-16',
+  tileClassName,
 }: {
   items: CarouselItem[];
   selectedId: string | null;
   onSelect: (item: CarouselItem | null) => void;
   pageSize: number;
+  thumbHeightClass?: string;
+  tileClassName?: string;
 }) {
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
@@ -872,19 +835,20 @@ function StampCarousel({
                   onClick={() => onSelect(active ? null : opt)}
                   className={cn(
                     'group flex flex-col items-center gap-1.5 overflow-hidden rounded-md border p-2 transition',
+                    tileClassName,
                     active
                       ? 'border-king-red bg-king-red/[0.08] ring-1 ring-king-red/40'
-                      : 'border-white/10 bg-king-black/30 active:scale-[0.98] [html.light_&]:border-king-ink/15 [html.light_&]:bg-white'
+                      : 'border-white/10 bg-king-black/30 active:scale-[0.98] hover:border-king-red/50 [html.light_&]:border-king-ink/15 [html.light_&]:bg-white'
                   )}
                   title={opt.name}
                 >
-                  <div className="flex h-16 w-full items-center justify-center">
+                  <div className={cn('flex w-full items-center justify-center', thumbHeightClass)}>
                     <img
                       src={opt.src}
                       alt={opt.name}
                       loading="lazy"
                       className={cn(
-                        'max-h-full max-w-[88%] object-contain',
+                        'max-h-full max-w-[88%] object-contain transition duration-300 group-hover:scale-[1.04]',
                         opt.imgExtraClass
                       )}
                     />
