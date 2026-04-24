@@ -11,6 +11,7 @@ import PageTransition from '@/components/ui/PageTransition';
 import CartDrawer from '@/components/cart/CartDrawer';
 import ScrollToTop from '@/components/layout/ScrollToTop';
 import SmoothScroll from '@/components/layout/SmoothScroll';
+import RouteErrorBoundary from '@/components/layout/RouteErrorBoundary';
 
 import Home from '@/pages/Home';
 import Products from '@/pages/Products';
@@ -94,7 +95,7 @@ function App() {
           <Navbar />
           <CartDrawer />
 
-          <AnimatePresence mode="wait">
+          <RouteErrorBoundary key={location.pathname}>
             <PageTransition key={location.pathname}>
               <Routes location={location}>
                 <Route path="/" element={<Home />} />
@@ -130,7 +131,7 @@ function App() {
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </PageTransition>
-          </AnimatePresence>
+          </RouteErrorBoundary>
 
           <Footer />
 
