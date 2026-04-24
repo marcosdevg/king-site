@@ -14,12 +14,15 @@ import {
   createProduct,
   deleteProduct,
   importSeedProductsIfMissing,
+  isValidCustomId,
   listProducts,
+  normalizeCustomId,
   updateProduct,
   type Product,
   type ProductCategory,
   type ProductInput,
   type ProductSize,
+  type StampCrossing,
 } from '@/services/products.service';
 import { useProductsStore } from '@/store/useProductsStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -29,6 +32,7 @@ import { uploadProductGalleryImage } from '@/services/storage.service';
 import StampsTab from '@/components/admin/StampsTab';
 import CouponsTab from '@/components/admin/CouponsTab';
 import LeadsTab from '@/components/admin/LeadsTab';
+import CollectionsTab from '@/components/admin/CollectionsTab';
 import AdminPaginationBar, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPaginationBar';
 import OrderCard from '@/components/admin/OrderCard';
 import AdminKPIs from '@/components/admin/AdminKPIs';
@@ -54,13 +58,18 @@ import KingLogo from '@/components/ui/KingLogo';
 import { cn } from '@/utils/cn';
 import { getLenisRoot } from '@/lib/lenisRoot';
 import {
-  PRODUCT_CATEGORIES,
   PRODUCT_CATEGORY_LABELS,
 } from '@/config/productCategories';
+import { useCategoriesStore } from '@/store/useCategoriesStore';
+import {
+  createCategory,
+  deleteCategory,
+  ensureDefaultCategories,
+} from '@/services/categories.service';
 
 const ALL_SIZES: ProductSize[] = ['P', 'M', 'G', 'GG', 'XGG'];
 
-type AdminTab = 'products' | 'orders' | 'kpis' | 'stamps' | 'coupons' | 'leads';
+type AdminTab = 'products' | 'orders' | 'kpis' | 'stamps' | 'coupons' | 'leads' | 'collections';
 
 export default function Admin() {
   const [tab, setTab] = useState<AdminTab>('products');
@@ -211,7 +220,7 @@ export default function Admin() {
         </motion.div>
 
         <div className="mb-8 flex flex-wrap gap-2">
-          {(['products', 'orders', 'kpis', 'coupons', 'stamps', 'leads'] as const).map((t) => (
+          {(['products', 'orders', 'kpis', 'coupons', 'stamps', 'leads', 'collections'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -232,7 +241,9 @@ export default function Admin() {
                       ? 'Cupons'
                       : t === 'stamps'
                         ? 'Estampas'
-                        : 'Leads'}
+                        : t === 'leads'
+                          ? 'Leads'
+                          : 'Coleção'}
             </button>
           ))}
         </div>
@@ -243,6 +254,8 @@ export default function Admin() {
           <CouponsTab />
         ) : tab === 'leads' ? (
           <LeadsTab />
+        ) : tab === 'collections' ? (
+          <CollectionsTab />
         ) : tab === 'kpis' ? (
           loading ? (
             <div className="flex justify-center py-20">
@@ -297,7 +310,7 @@ export default function Admin() {
                     >
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-14 w-12 overflow-hidden bg-king-graphite">
+                          <div className="h-14 w-12 overflow-hidden">
                             <img src={p.images[0]} alt="" className="h-full w-full object-cover" />
                           </div>
                           <div>
@@ -454,7 +467,20 @@ function ProductModal({
     featured: product?.featured ?? false,
     tag: product?.tag,
   });
-  const [imageUrls, setImageUrls] = useState<string[]>(() => product?.images ?? []);
+  const [customId, setCustomId] = useState<string>(product?.id ?? '');
+  type GalleryItem = { id: string; url: string };
+  const seedGallery = (): GalleryItem[] => {
+    const imgs = product?.images ?? [];
+    const ids = product?.imageIds ?? [];
+    return imgs.map((url, i) => ({
+      id: (ids[i] && ids[i].trim()) || `img-${i + 1}`,
+      url,
+    }));
+  };
+  const [gallery, setGallery] = useState<GalleryItem[]>(() => seedGallery());
+  const [crossings, setCrossings] = useState<StampCrossing[]>(
+    () => product?.stampCrossings ?? []
+  );
   const [externalUrlInput, setExternalUrlInput] = useState('');
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -536,6 +562,12 @@ function ProductModal({
     });
   };
 
+  const defaultIdFromFilename = (filename: string): string => {
+    const base = filename.replace(/\.[^.]+$/, '');
+    const slug = normalizeCustomId(base);
+    if (!slug) return `img-${Date.now().toString(36).slice(-4)}`;
+    return slug.slice(0, 50);
+  };
   const handleGalleryFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
@@ -556,7 +588,16 @@ function ProductModal({
           continue;
         }
         const url = await uploadProductGalleryImage(file);
-        setImageUrls((prev) => [...prev, url]);
+        const base = defaultIdFromFilename(file.name);
+        setGallery((prev) => {
+          const taken = new Set(prev.map((g) => g.id));
+          let candidate = base;
+          let i = 2;
+          while (taken.has(candidate)) {
+            candidate = `${base}-${i++}`;
+          }
+          return [...prev, { id: candidate, url }];
+        });
       }
     } catch (err) {
       console.error(err);
@@ -582,17 +623,74 @@ function ProductModal({
       toast.error('URL inválida');
       return;
     }
-    setImageUrls((p) => [...p, raw]);
+    const base = defaultIdFromFilename(raw.split('/').pop() ?? 'img');
+    setGallery((prev) => {
+      const taken = new Set(prev.map((g) => g.id));
+      let candidate = base;
+      let i = 2;
+      while (taken.has(candidate)) {
+        candidate = `${base}-${i++}`;
+      }
+      return [...prev, { id: candidate, url: raw }];
+    });
     setExternalUrlInput('');
   };
 
   const removeImageAt = (index: number) => {
-    setImageUrls((p) => p.filter((_, i) => i !== index));
+    setGallery((p) => p.filter((_, i) => i !== index));
+  };
+
+  const updateGalleryId = (index: number, rawId: string) => {
+    setGallery((prev) =>
+      prev.map((g, i) => (i === index ? { ...g, id: normalizeCustomId(rawId) } : g))
+    );
+  };
+
+  const addCrossing = () => {
+    const firstBase = gallery[0]?.id ?? '';
+    setCrossings((p) => [
+      ...p,
+      { productImageId: firstBase, stampId: '', side: 'back', overlayImageUrl: '' },
+    ]);
+  };
+  const updateCrossing = (index: number, patch: Partial<StampCrossing>) => {
+    setCrossings((p) => p.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  };
+  const removeCrossing = (index: number) => {
+    setCrossings((p) => p.filter((_, i) => i !== index));
+  };
+  const uploadCrossingOverlay = async (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione uma imagem');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('Máximo 8MB');
+      return;
+    }
+    try {
+      const url = await uploadProductGalleryImage(file);
+      updateCrossing(index, { overlayImageUrl: url });
+      toast.success('Imagem do cruzamento enviada');
+    } catch (err) {
+      console.error(err);
+      toast.error('Falha no upload (verifique regras do Storage)');
+    }
   };
 
   const validateWizardStepBeforeNext = (): boolean => {
     switch (wizardStep) {
       case 1:
+        if (mode === 'create' && !isValidCustomId(customId)) {
+          toast.error('ID único inválido (3-60 caracteres, letras minúsculas, números e hífens)');
+          return false;
+        }
         if (!form.name?.trim()) {
           toast.error('Informe o nome do produto');
           return false;
@@ -607,9 +705,21 @@ function ProductModal({
         }
         return true;
       case 2: {
-        const imgs = imageUrls.map((u) => u.trim()).filter(Boolean);
+        const imgs = gallery.filter((g) => g.url.trim());
         if (imgs.length === 0) {
           toast.error('Adicione ao menos uma imagem para continuar');
+          return false;
+        }
+        for (const item of imgs) {
+          if (!isValidCustomId(item.id)) {
+            toast.error(`ID da imagem inválido: "${item.id || '(vazio)'}" — use 3-60 caracteres (letras minúsculas, números, hífens).`);
+            return false;
+          }
+        }
+        const ids = imgs.map((g) => g.id);
+        const set = new Set(ids);
+        if (set.size !== ids.length) {
+          toast.error('IDs das imagens precisam ser únicos dentro do produto.');
           return false;
         }
         return true;
@@ -639,7 +749,7 @@ function ProductModal({
     setWizardStep((s) => (s <= 1 ? 1 : ((s - 1) as ProductWizardStep)));
   };
 
-  const galleryCount = imageUrls.map((u) => u.trim()).filter(Boolean).length;
+  const galleryCount = gallery.filter((g) => g.url.trim()).length;
   const backSummaryText =
     backScope === 'all'
       ? 'Todas as artes do catálogo'
@@ -654,7 +764,13 @@ function ProductModal({
         : `${frontPick.size} logo(s) selecionado(s)`;
 
   const save = async () => {
-    const images = imageUrls.map((u) => u.trim()).filter(Boolean);
+    const validGallery = gallery.filter((g) => g.url.trim());
+    const images = validGallery.map((g) => g.url.trim());
+    const imageIds = validGallery.map((g) => g.id);
+    if (mode === 'create' && !isValidCustomId(customId)) {
+      toast.error('ID único inválido (3-60 caracteres, letras minúsculas, números e hífens)');
+      return;
+    }
     if (!form.name?.trim() || !form.description?.trim()) {
       toast.error('Nome e descrição são obrigatórios');
       return;
@@ -671,6 +787,16 @@ function ProductModal({
       toast.error('Adicione ao menos uma imagem (upload no Storage ou URL externa)');
       return;
     }
+    for (const imgId of imageIds) {
+      if (!isValidCustomId(imgId)) {
+        toast.error(`ID de imagem inválido: "${imgId || '(vazio)'}"`);
+        return;
+      }
+    }
+    if (new Set(imageIds).size !== imageIds.length) {
+      toast.error('IDs das imagens precisam ser únicos dentro do produto');
+      return;
+    }
     if (backScope === 'subset' && backPick.size === 0) {
       toast.error('Costas: selecione ao menos uma estampa ou mude para “todas/nenhuma”.');
       return;
@@ -679,9 +805,25 @@ function ProductModal({
       toast.error('Frente: selecione ao menos um logo ou mude para “todos/nenhum”.');
       return;
     }
+    // Filtra cruzamentos válidos (todos os campos preenchidos e base image ainda existe)
+    const validIds = new Set(imageIds);
+    const validCrossings = crossings.filter(
+      (c) =>
+        c.productImageId &&
+        validIds.has(c.productImageId) &&
+        c.stampId &&
+        c.overlayImageUrl &&
+        (c.side === 'back' || c.side === 'front')
+    );
+
     setSaving(true);
     try {
-      const base = { ...form, images };
+      const base = {
+        ...form,
+        images,
+        imageIds,
+        stampCrossings: validCrossings,
+      };
 
       if (mode === 'create') {
         const payload: ProductInput = { ...base };
@@ -689,7 +831,7 @@ function ProductModal({
         else if (backScope === 'subset') payload.allowedBackStampIds = [...backPick];
         if (frontScope === 'none') payload.allowedFrontStampIds = [];
         else if (frontScope === 'subset') payload.allowedFrontStampIds = [...frontPick];
-        await createProduct(payload);
+        await createProduct(payload, customId);
         toast.success('Produto adicionado ao reino');
       } else if (product) {
         const patch: Record<string, unknown> = { ...base };
@@ -707,7 +849,8 @@ function ProductModal({
       onSaved();
     } catch (err) {
       console.error(err);
-      toast.error('Erro ao salvar no Firestore');
+      const msg = err instanceof Error ? err.message : 'Erro ao salvar no Firestore';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -851,6 +994,35 @@ function ProductModal({
                   title="Dados do produto"
                   subtitle="Nome, preços, estoque, categoria e tamanhos."
                 >
+                  {mode === 'create' && (
+                    <div className="mb-5 rounded-md border border-king-red/25 bg-king-red/[0.04] p-4">
+                      <label className="flex flex-col gap-2">
+                        <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-king-red sm:text-xs">
+                          ID único do produto *
+                        </span>
+                        <input
+                          type="text"
+                          value={customId}
+                          onChange={(e) => setCustomId(normalizeCustomId(e.target.value))}
+                          placeholder="ex.: blood-of-christ"
+                          className="input-king-panel font-mono tracking-[0.1em]"
+                        />
+                        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver/70">
+                          3-60 caracteres · só letras minúsculas, números e hífens · não pode repetir
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                  {mode === 'edit' && product && (
+                    <div className="mb-5 rounded-md border border-white/5 bg-king-black/30 p-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver/70">
+                        ID (não editável)
+                      </p>
+                      <p className="mt-1 font-mono text-sm tracking-[0.1em] text-king-fg">
+                        {product.id}
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:gap-6 lg:grid-cols-2 xl:gap-8">
                     <Field label="Nome" value={form.name} onChange={(v) => set('name', v)} />
                     <Field label="Tag (opcional)" value={form.tag ?? ''} onChange={(v) => set('tag', v)} />
@@ -879,22 +1051,11 @@ function ProductModal({
                       onChange={(v) => set('stock', parseInt(v) || 0)}
                       type="number"
                     />
-                    <label className="flex flex-col gap-2">
-                      <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-king-silver/90 sm:text-xs">
-                        Categoria
-                      </span>
-                      <select
-                        value={form.category}
-                        onChange={(e) => set('category', e.target.value as ProductCategory)}
-                        className="select-king-dark font-mono tracking-[0.18em]"
-                      >
-                        {PRODUCT_CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {PRODUCT_CATEGORY_LABELS[c]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <CategoryField
+                      value={form.category}
+                      onChange={(v) => set('category', v as ProductCategory)}
+                      isLight={isLight}
+                    />
                   </div>
 
                   <div className="mt-6">
@@ -984,41 +1145,77 @@ function ProductModal({
                     Adicionar URL
                   </button>
                 </div>
-                {imageUrls.length > 0 && (
-                  <ul className="mt-4 grid grid-cols-5 gap-1.5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-9 xl:grid-cols-10">
-                    {imageUrls.map((url, idx) => (
-                      <li
-                        key={`${url}-${idx}`}
-                        className={cn(
-                          'group relative aspect-[3/4] w-full overflow-hidden rounded-sm border',
-                          isLight
-                            ? 'border-black/10 bg-stone-100'
-                            : 'border-neutral-900 bg-king-black/50'
-                        )}
-                      >
-                        <img src={url} alt="" className="h-full w-full object-cover" />
-                        <div
+                {gallery.length > 0 && (
+                  <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    {gallery.map((item, idx) => {
+                      const idOk = isValidCustomId(item.id);
+                      const duplicate = gallery.filter((g) => g.id === item.id).length > 1;
+                      return (
+                        <li
+                          key={`${item.url}-${idx}`}
                           className={cn(
-                            'absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t to-transparent px-1 py-1 pt-5',
-                            isLight
-                              ? 'from-black/55 via-black/25'
-                              : 'from-king-black via-king-black/90'
+                            'group relative flex flex-col overflow-hidden rounded-md border',
+                            !idOk || duplicate
+                              ? 'border-red-500/70'
+                              : isLight
+                                ? 'border-black/10 bg-stone-100'
+                                : 'border-neutral-900 bg-king-black/50'
                           )}
                         >
-                          <span className="font-mono text-[7px] text-king-silver sm:text-[8px]">
-                            {idx === 0 ? 'Capa' : `#${idx + 1}`}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeImageAt(idx)}
-                            className="rounded p-1 text-king-silver transition hover:bg-king-red/20 hover:text-king-red"
-                            aria-label="Remover imagem"
-                          >
-                            <HiOutlineTrash className="text-sm" />
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                          <div className="relative aspect-[3/4] w-full overflow-hidden">
+                            <img src={item.url} alt="" className="h-full w-full object-cover" />
+                            <div
+                              className={cn(
+                                'absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t to-transparent px-1 py-1 pt-5',
+                                isLight
+                                  ? 'from-black/55 via-black/25'
+                                  : 'from-king-black via-king-black/90'
+                              )}
+                            >
+                              <span className="font-mono text-[8px] text-king-silver sm:text-[9px]">
+                                {idx === 0 ? 'Capa' : `#${idx + 1}`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeImageAt(idx)}
+                                className="rounded p-1 text-king-silver transition hover:bg-king-red/20 hover:text-king-red"
+                                aria-label="Remover imagem"
+                              >
+                                <HiOutlineTrash className="text-sm" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1 p-2">
+                            <label className="font-mono text-[9px] uppercase tracking-[0.22em] text-king-red">
+                              ID *
+                            </label>
+                            <input
+                              value={item.id}
+                              onChange={(e) => updateGalleryId(idx, e.target.value)}
+                              className={cn(
+                                'w-full bg-transparent px-1 py-1 font-mono text-[11px] tracking-[0.08em] outline-none ring-0 border-b',
+                                duplicate || !idOk
+                                  ? 'border-red-500 text-red-400'
+                                  : isLight
+                                    ? 'border-black/20 text-king-ink focus:border-king-red'
+                                    : 'border-white/15 text-king-fg focus:border-king-red'
+                              )}
+                              placeholder="ex.: frente-01"
+                            />
+                            {duplicate && (
+                              <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-red-400">
+                                ID repetido
+                              </span>
+                            )}
+                            {!idOk && item.id && (
+                              <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-red-400">
+                                ID inválido
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </ProductModalSection>
@@ -1258,6 +1455,22 @@ function ProductModal({
                   </div>
                 )}
               </ProductModalSection>
+
+              <ProductModalSection
+                isLight={isLight}
+                title="Cruzamentos de preview"
+                subtitle="Fotos pré-compostas que substituem a imagem do produto quando o cliente seleciona uma estampa específica. Costas prioriza a visualização; frente aparece como miniatura no canto superior direito."
+              >
+                <CrossingsEditor
+                  crossings={crossings}
+                  gallery={gallery}
+                  onAdd={addCrossing}
+                  onUpdate={updateCrossing}
+                  onRemove={removeCrossing}
+                  onUpload={uploadCrossingOverlay}
+                  isLight={isLight}
+                />
+              </ProductModalSection>
               </div>
             )}
 
@@ -1328,7 +1541,9 @@ function ProductModal({
                     <div className={resumeCard}>
                       <dt className="text-king-silver/55">Categoria</dt>
                       <dd className="mt-1 text-sm normal-case tracking-normal text-king-fg">
-                        {PRODUCT_CATEGORY_LABELS[form.category]}
+                        {(useCategoriesStore.getState().categories.find((c) => c.id === form.category)?.name) ||
+                          PRODUCT_CATEGORY_LABELS[form.category] ||
+                          form.category}
                       </dd>
                     </div>
                     <div className={cn(resumeCard, 'sm:col-span-2')}>
@@ -1507,5 +1722,350 @@ function Field({
         className="input-king-panel"
       />
     </label>
+  );
+}
+
+function CategoryField({
+  value,
+  onChange,
+  isLight,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  isLight: boolean;
+}) {
+  const categories = useCategoriesStore((s) => s.categories);
+  const fetched = useCategoriesStore((s) => s.fetched);
+  const fetchCategories = useCategoriesStore((s) => s.fetch);
+  const invalidateCategories = useCategoriesStore((s) => s.invalidate);
+  const [addingName, setAddingName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!fetched) {
+        await fetchCategories();
+        const state = useCategoriesStore.getState();
+        if (state.categories.length === 0) {
+          try {
+            await ensureDefaultCategories();
+            await useCategoriesStore.getState().invalidate();
+          } catch {
+            // silent — admin may not have permission until rules deployed
+          }
+        }
+      }
+    })();
+  }, [fetched, fetchCategories]);
+
+  // Auto-select first category if current value not in list
+  useEffect(() => {
+    if (categories.length === 0) return;
+    if (!categories.some((c) => c.id === value)) {
+      onChange(categories[0].id);
+    }
+  }, [categories, value, onChange]);
+
+  const onAdd = async () => {
+    const name = addingName.trim();
+    if (!name) return;
+    setBusy(true);
+    try {
+      const created = await createCategory(name, categories.length);
+      toast.success('Categoria criada');
+      setAddingName('');
+      await invalidateCategories();
+      onChange(created.id);
+    } catch {
+      toast.error('Erro ao criar categoria');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDelete = async (id: string) => {
+    if (categories.length <= 1) {
+      toast.error('Mantenha ao menos uma categoria');
+      return;
+    }
+    if (!confirm('Apagar esta categoria? Produtos com essa categoria continuam existindo mas ficarão sem grupo.')) return;
+    setBusy(true);
+    try {
+      await deleteCategory(id);
+      toast.success('Categoria removida');
+      await invalidateCategories();
+    } catch {
+      toast.error('Erro ao remover');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-king-silver/90 sm:text-xs">
+        Categoria
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {categories.map((c) => {
+          const active = value === c.id;
+          return (
+            <div
+              key={c.id}
+              className={cn(
+                'inline-flex items-center overflow-hidden border transition',
+                active
+                  ? 'border-king-red bg-king-red text-king-bone shadow-glow-red/30'
+                  : isLight
+                    ? 'border-black/12 bg-white text-king-ink hover:border-king-red/45'
+                    : 'border-neutral-700 text-king-silver hover:border-neutral-500'
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onChange(c.id)}
+                className="px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em]"
+              >
+                {c.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(c.id)}
+                disabled={busy}
+                aria-label={`Remover categoria ${c.name}`}
+                className={cn(
+                  'flex h-full w-7 shrink-0 items-center justify-center border-l transition',
+                  active
+                    ? 'border-king-bone/30 text-king-bone hover:bg-king-red/90'
+                    : 'border-white/10 text-king-silver/60 hover:text-red-500'
+                )}
+              >
+                <HiOutlineX className="text-xs" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={addingName}
+          onChange={(e) => setAddingName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), onAdd())}
+          placeholder="Nova categoria (ex.: Linha Páscoa)"
+          className="input-king-panel flex-1 min-w-[180px]"
+        />
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={busy || !addingName.trim()}
+          className={cn(
+            'inline-flex items-center gap-1 border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] transition disabled:opacity-50',
+            isLight
+              ? 'border-king-red/40 bg-king-red/10 text-king-red hover:bg-king-red/20'
+              : 'border-king-red/60 bg-king-red/15 text-king-bone hover:bg-king-red/25'
+          )}
+        >
+          <HiOutlinePlus /> Criar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CrossingsEditor({
+  crossings,
+  gallery,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onUpload,
+  isLight,
+}: {
+  crossings: StampCrossing[];
+  gallery: Array<{ id: string; url: string }>;
+  onAdd: () => void;
+  onUpdate: (index: number, patch: Partial<StampCrossing>) => void;
+  onRemove: (index: number) => void;
+  onUpload: (index: number, e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
+  isLight: boolean;
+}) {
+  const mergedBack = useStampsStore((s) => s.mergedBack);
+  const mergedFront = useStampsStore((s) => s.mergedFront);
+
+  const stampOptionsFor = (side: 'back' | 'front') =>
+    side === 'back'
+      ? mergedBack.map((s) => ({ id: s.id, name: s.name }))
+      : mergedFront.map((s) => ({ id: s.id, name: s.name }));
+
+  if (gallery.length === 0) {
+    return (
+      <p className="font-serif text-sm italic text-king-silver/80">
+        Adicione imagens na galeria (Passo 2) antes de configurar cruzamentos.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {crossings.length === 0 && (
+        <p className="font-serif text-sm italic text-king-silver/75">
+          Nenhum cruzamento ainda. Opcional — use quando quiser trocar a foto do produto
+          ao selecionar uma estampa específica.
+        </p>
+      )}
+
+      {crossings.map((c, idx) => {
+        const options = stampOptionsFor(c.side);
+        const baseOk = !!gallery.find((g) => g.id === c.productImageId);
+        const baseUrl = gallery.find((g) => g.id === c.productImageId)?.url ?? '';
+        const invalid = !baseOk || !c.stampId || !c.overlayImageUrl;
+        return (
+          <div
+            key={idx}
+            className={cn(
+              'grid grid-cols-1 gap-4 rounded-md border p-4 md:grid-cols-[auto_1fr_auto]',
+              invalid
+                ? 'border-amber-500/40'
+                : isLight
+                  ? 'border-black/[0.08] bg-stone-50'
+                  : 'border-neutral-900 bg-king-black/35'
+            )}
+          >
+            <div className="flex gap-3">
+              <div
+                className={cn(
+                  'relative aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-sm border',
+                  isLight ? 'border-black/10 bg-stone-100' : 'border-neutral-800 bg-king-black/60'
+                )}
+              >
+                {baseUrl && (
+                  <img src={baseUrl} alt="" className="h-full w-full object-cover opacity-60" />
+                )}
+                <span className="absolute left-1 top-1 rounded bg-king-black/80 px-1 font-mono text-[8px] uppercase tracking-[0.2em] text-king-silver">
+                  Base
+                </span>
+              </div>
+              <div
+                className={cn(
+                  'relative aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-sm border',
+                  isLight ? 'border-black/10 bg-stone-100' : 'border-neutral-800 bg-king-black/60'
+                )}
+              >
+                {c.overlayImageUrl ? (
+                  <img src={c.overlayImageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center font-mono text-[9px] uppercase tracking-[0.2em] text-king-silver/50">
+                    sem preview
+                  </div>
+                )}
+                <span className="absolute left-1 top-1 rounded bg-king-red/80 px-1 font-mono text-[8px] uppercase tracking-[0.2em] text-king-bone">
+                  Preview
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver">
+                  Imagem base do produto
+                </span>
+                <select
+                  value={c.productImageId}
+                  onChange={(e) => onUpdate(idx, { productImageId: e.target.value })}
+                  className="select-king-dark font-mono tracking-[0.1em]"
+                >
+                  <option value="">— escolher —</option>
+                  {gallery.map((g, i) => (
+                    <option key={g.id} value={g.id}>
+                      {i === 0 ? 'Capa · ' : `#${i + 1} · `}
+                      {g.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver">
+                  Lado da estampa
+                </span>
+                <select
+                  value={c.side}
+                  onChange={(e) =>
+                    onUpdate(idx, { side: e.target.value as 'back' | 'front', stampId: '' })
+                  }
+                  className="select-king-dark font-mono tracking-[0.1em]"
+                >
+                  <option value="back">Costas</option>
+                  <option value="front">Frente</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 sm:col-span-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver">
+                  Estampa {c.side === 'back' ? 'costas' : 'frente'}
+                </span>
+                <select
+                  value={c.stampId}
+                  onChange={(e) => onUpdate(idx, { stampId: e.target.value })}
+                  className="select-king-dark font-mono tracking-[0.1em]"
+                >
+                  <option value="">— escolher —</option>
+                  {options.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} · {o.id}
+                    </option>
+                  ))}
+                </select>
+                {options.length === 0 && (
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-amber-400">
+                    Nenhuma estampa {c.side === 'back' ? 'costas' : 'frente'} cadastrada.
+                  </span>
+                )}
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label
+                className={cn(
+                  'inline-flex cursor-pointer items-center justify-center gap-2 border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] transition',
+                  isLight
+                    ? 'border-king-red/40 bg-king-red/10 text-king-red hover:bg-king-red/20'
+                    : 'border-king-red/60 bg-king-red/15 text-king-bone hover:bg-king-red/25'
+                )}
+              >
+                <HiOutlineUpload /> Enviar imagem
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => onUpload(idx, e)}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => onRemove(idx)}
+                className="inline-flex items-center justify-center gap-2 border border-white/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver transition hover:border-red-500 hover:text-red-500"
+              >
+                <HiOutlineTrash /> Remover
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      <button
+        type="button"
+        onClick={onAdd}
+        className={cn(
+          'inline-flex w-fit items-center gap-2 border px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.25em] transition',
+          isLight
+            ? 'border-king-red/40 bg-king-red/10 text-king-red hover:bg-king-red/20'
+            : 'border-king-red/60 bg-king-red/15 text-king-bone hover:bg-king-red/25'
+        )}
+      >
+        <HiOutlinePlus /> Adicionar cruzamento
+      </button>
+    </div>
   );
 }

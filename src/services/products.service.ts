@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -14,10 +13,27 @@ import {
 import { db } from './firebase';
 import { SEED_PRODUCTS } from '@/data/seedProducts';
 import type { ProductCategory } from '@/config/productCategories';
+import { isValidCustomId, normalizeCustomId } from './stamps.service';
+export { isValidCustomId, normalizeCustomId } from './stamps.service';
 
 export type { ProductCategory } from '@/config/productCategories';
 
 export type ProductSize = 'P' | 'M' | 'G' | 'GG' | 'XGG';
+
+/**
+ * Imagem pré-composta que mostra um produto com uma estampa aplicada.
+ * Serve pro "preview" quando o cliente seleciona uma estampa na página do produto.
+ */
+export interface StampCrossing {
+  /** ID da imagem base do produto (vem de `imageIds`). */
+  productImageId: string;
+  /** ID da estampa (mesmo formato do catálogo: prefixo `fb_` ou id legado). */
+  stampId: string;
+  /** Lado da estampa aplicada. */
+  side: 'back' | 'front';
+  /** URL da imagem composta que substitui/sobrepõe a base quando a estampa for selecionada. */
+  overlayImageUrl: string;
+}
 
 export interface Product {
   id: string;
@@ -26,6 +42,10 @@ export interface Product {
   price: number;
   oldPrice?: number;
   images: string[];
+  /** IDs opcionais em paralelo a `images` (mesmo index). Útil para referenciar arquivos específicos. */
+  imageIds?: string[];
+  /** Cruzamentos produto×estampa — mostram uma foto pré-composta quando o cliente seleciona uma estampa. */
+  stampCrossings?: StampCrossing[];
   category: ProductCategory;
   sizes: ProductSize[];
   stock: number;
@@ -72,15 +92,24 @@ function omitUndefined<T extends Record<string, unknown>>(obj: T): Record<string
   ) as Record<string, unknown>;
 }
 
-export async function createProduct(data: ProductInput): Promise<string> {
-  const ref = await addDoc(
-    collection(db, COLLECTION),
-    {
-      ...omitUndefined(data as unknown as Record<string, unknown>),
-      createdAt: serverTimestamp(),
-    }
-  );
-  return ref.id;
+export async function createProduct(
+  data: ProductInput,
+  customId: string
+): Promise<string> {
+  const id = normalizeCustomId(customId);
+  if (!isValidCustomId(id)) {
+    throw new Error('ID inválido. Use 3-60 caracteres: letras minúsculas, números e hífens.');
+  }
+  const ref = doc(db, COLLECTION, id);
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    throw new Error('Já existe um produto com esse ID. Escolha outro.');
+  }
+  await setDoc(ref, {
+    ...omitUndefined(data as unknown as Record<string, unknown>),
+    createdAt: serverTimestamp(),
+  });
+  return id;
 }
 
 export async function updateProduct(id: string, data: Record<string, unknown>) {

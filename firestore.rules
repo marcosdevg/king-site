@@ -121,6 +121,24 @@ service cloud.firestore {
     }
 
     // =========================================================
+    // CATEGORIES — chips de filtro dinâmicos na loja.
+    // Leitura pública; CRUD só admin.
+    // =========================================================
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================
+    // COLLECTIONS — grupos customizados de produtos (ex.: "Páscoa 2026").
+    // Leitura pública; CRUD só admin.
+    // =========================================================
+    match /collections/{collectionId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================
     // LEADS — qualquer visitante cria (form de WhatsApp na home).
     // Admin lista/remove.
     // =========================================================

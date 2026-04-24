@@ -410,7 +410,7 @@ export default function Checkout() {
                   key={`${i.productId}-${i.size}-${i.stamp?.id ?? 'n'}-${i.stampFront?.id ?? 'nf'}`}
                   className="flex gap-3"
                 >
-                  <div className="h-16 w-14 overflow-hidden bg-king-graphite">
+                  <div className="h-16 w-14 overflow-hidden">
                     <img src={i.image} alt="" className="h-full w-full object-cover" />
                   </div>
                   <div className="flex flex-1 flex-col">

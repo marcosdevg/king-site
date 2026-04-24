@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { Stamp } from '@/assets/estampas';
-import { FRONT_LOGO_STAMPS } from '@/assets/logos';
 import type { FrontLogoStamp } from '@/assets/logos';
 import { listStamps, type FirestoreStampDoc } from '@/services/stamps.service';
 
@@ -49,7 +48,7 @@ interface StampsState {
 
 export const useStampsStore = create<StampsState>((set, get) => ({
   mergedBack: [],
-  mergedFront: [...FRONT_LOGO_STAMPS],
+  mergedFront: [],
   loading: false,
   fetched: false,
   error: null,
@@ -59,7 +58,7 @@ export const useStampsStore = create<StampsState>((set, get) => ({
     try {
       const docs = await listStamps();
       const rb: Stamp[] = [];
-      const rf: FrontLogoStamp[] = [...FRONT_LOGO_STAMPS];
+      const rf: FrontLogoStamp[] = [];
       for (const d of docs) {
         const b = docToBackStamp(d);
         if (b) rb.push(b);
@@ -73,7 +72,7 @@ export const useStampsStore = create<StampsState>((set, get) => ({
         error: e instanceof Error ? e.message : 'Erro ao carregar estampas',
         loading: false,
         mergedBack: [],
-        mergedFront: [...FRONT_LOGO_STAMPS],
+        mergedFront: [],
         fetched: true,
       });
     }

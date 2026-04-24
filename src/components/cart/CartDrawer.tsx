@@ -91,7 +91,7 @@ export default function CartDrawer() {
                       exit={{ opacity: 0, x: 30 }}
                       className="group flex gap-4 border-b border-white/5 pb-5"
                     >
-                      <div className="relative h-24 w-20 shrink-0 overflow-hidden bg-king-graphite">
+                      <div className="relative h-24 w-20 shrink-0 overflow-hidden">
                         <img
                           src={item.image}
                           alt={item.name}

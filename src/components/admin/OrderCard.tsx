@@ -227,7 +227,7 @@ export default function OrderCard({ order, onStatusChange, onPaymentStatusChange
                   key={`${i.productId}-${idx}`}
                   className="flex gap-3 border-b border-white/5 pb-3 last:border-b-0"
                 >
-                  <div className="h-16 w-14 shrink-0 overflow-hidden bg-king-graphite">
+                  <div className="h-16 w-14 shrink-0 overflow-hidden">
                     <img src={i.image} alt="" className="h-full w-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">

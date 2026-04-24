@@ -1,28 +1,19 @@
 /**
- * Categorias de produto (campo `category` no Firestore).
+ * Categorias de produto.
  *
- * Como adicionar uma nova coleção / categoria:
- * 1. Inclua o **id** (slug em minúsculas, sem acento, ex.: `linha-rei`) no array `PRODUCT_CATEGORIES` abaixo.
- * 2. Cadastre o **rótulo** em `PRODUCT_CATEGORY_LABELS` (texto exibido no Admin).
- * 3. Opcional: em `PRODUCT_CATEGORY_SHOP_LABELS`, um nome diferente na loja (/produtos).
- * 4. Rode o TypeScript (`npm run build`) — o tipo `ProductCategory` deriva da lista.
- * 5. Produtos antigos no Firebase continuam com o `category` antigo até você editar no Admin.
- *
- * “Coleção sacra” = categoria `colecao-sacra` (um único campo; não há entidade separada de “coleção”).
+ * As categorias agora são dinâmicas (coleção `categories` no Firestore). Este arquivo
+ * guarda apenas os rótulos legados dos seeds de demonstração — qualquer categoria nova
+ * é criada pelo admin e lida do Firebase via `useCategoriesStore`.
  */
 
-export const PRODUCT_CATEGORIES = [
-  'oversized',
-  'camiseta',
-  'moletom',
-  'regata',
-  'colecao-sacra',
-  'tercos',
-] as const;
+export type ProductCategory = string;
 
-export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+export const DEFAULT_CATEGORY_SEEDS: Array<{ id: string; name: string; order: number }> = [
+  { id: 'oversized', name: 'Oversized', order: 0 },
+  { id: 'tercos', name: 'Terços', order: 1 },
+];
 
-export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
+export const LEGACY_CATEGORY_LABELS: Record<string, string> = {
   oversized: 'Oversized',
   camiseta: 'Camiseta',
   moletom: 'Moletom',
@@ -31,10 +22,19 @@ export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   tercos: 'Terços',
 };
 
-/** Rótulo na vitrine (chips / filtro). Se omitido, usa `PRODUCT_CATEGORY_LABELS`. */
-export const PRODUCT_CATEGORY_SHOP_LABELS: Partial<Record<ProductCategory, string>> = {
-  'colecao-sacra': 'Linha Sagrada',
-  camiseta: 'Camisetas',
-  moletom: 'Moletons',
-  regata: 'Regatas',
-};
+/** Usado como fallback quando uma categoria não existe mais no Firestore. */
+export const PRODUCT_CATEGORY_LABELS: Record<string, string> = LEGACY_CATEGORY_LABELS;
+
+/** Mantido temporariamente para seeds antigos; categorias novas vêm do Firestore. */
+export const PRODUCT_CATEGORIES: readonly string[] = Object.keys(LEGACY_CATEGORY_LABELS);
+
+export function slugifyCategoryName(raw: string): string {
+  return (raw || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40);
+}

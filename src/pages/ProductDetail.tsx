@@ -5,7 +5,6 @@ import {
   HiOutlineShoppingCart,
   HiOutlineHeart,
   HiArrowNarrowLeft,
-  HiOutlinePencilAlt,
 } from 'react-icons/hi';
 import { Cross, Crown, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,7 +16,6 @@ import type { Product, ProductSize } from '@/services/products.service';
 import { getProduct } from '@/services/products.service';
 import { SEED_PRODUCTS } from '@/data/seedProducts';
 import { cn } from '@/utils/cn';
-import StampSelector from '@/components/products/StampSelector';
 import MeasureGuideModal from '@/components/products/MeasureGuideModal';
 import type { Stamp } from '@/assets/estampas';
 import {
@@ -47,11 +45,11 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [stamp, setStamp] = useState<Stamp | null>(null);
   const [stampFront, setStampFront] = useState<FrontLogoStamp | null>(null);
-  const [stampOpen, setStampOpen] = useState(false);
   const [measureGuideOpen, setMeasureGuideOpen] = useState(false);
   const [mobileStep, setMobileStep] = useState(1);
 
   const mergedFront = useStampsStore((s) => s.mergedFront);
+  const mergedBack = useStampsStore((s) => s.mergedBack);
 
   const allowsBackStamps = useMemo(
     () => (product ? productAllowsBackStamps(product) : false),
@@ -66,11 +64,48 @@ export default function ProductDetail() {
     const ids = getEffectiveFrontStampIds(product);
     return mergedFront.filter((o) => ids.includes(o.id));
   }, [product, mergedFront]);
-  const backStampIdsForModal = useMemo(() => {
-    if (!product) return undefined as string[] | undefined;
-    if (product.allowedBackStampIds === undefined) return undefined;
-    return getEffectiveBackStampIds(product);
-  }, [product]);
+  const backOptions = useMemo(() => {
+    if (!product) return mergedBack;
+    const ids = getEffectiveBackStampIds(product);
+    return mergedBack.filter((o) => ids.includes(o.id));
+  }, [product, mergedBack]);
+
+  const preview = useMemo(() => {
+    const fallback = product?.images[selectedImage] ?? '';
+    if (!product) return { main: fallback, cornerOverlay: null as string | null };
+    const crossings = product.stampCrossings ?? [];
+    const baseImageId = product.imageIds?.[selectedImage];
+
+    const findMatch = (side: 'back' | 'front', stampId: string) => {
+      // Tenta match exato (base image + stamp) primeiro.
+      if (baseImageId) {
+        const exact = crossings.find(
+          (c) => c.side === side && c.stampId === stampId && c.productImageId === baseImageId
+        );
+        if (exact?.overlayImageUrl) return exact;
+      }
+      // Fallback: qualquer cruzamento pra essa estampa (produto sem imageIds, etc.)
+      return (
+        crossings.find(
+          (c) => c.side === side && c.stampId === stampId && c.overlayImageUrl
+        ) ?? null
+      );
+    };
+
+    const backMatch = stamp ? findMatch('back', stamp.id) : null;
+    const frontMatch = stampFront ? findMatch('front', stampFront.id) : null;
+
+    if (backMatch) {
+      return {
+        main: backMatch.overlayImageUrl,
+        cornerOverlay: frontMatch?.overlayImageUrl ?? null,
+      };
+    }
+    if (frontMatch) {
+      return { main: frontMatch.overlayImageUrl, cornerOverlay: null };
+    }
+    return { main: fallback, cornerOverlay: null };
+  }, [product, selectedImage, stamp, stampFront]);
 
   const mobileSteps = useMemo(() => {
     const steps: Array<'info' | 'back' | 'front'> = ['info'];
@@ -268,13 +303,42 @@ export default function ProductDetail() {
               initial={{ opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative aspect-[3/4] overflow-hidden bg-king-graphite"
+              className="relative aspect-[3/4] overflow-hidden"
             >
-              <img
-                src={product.images[selectedImage]}
-                alt={product.name}
-                className="h-full w-full object-cover"
-              />
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={preview.main}
+                  src={preview.main}
+                  alt={product.name}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </AnimatePresence>
+              <AnimatePresence>
+                {preview.cornerOverlay && (
+                  <motion.div
+                    key={preview.cornerOverlay}
+                    initial={{ opacity: 0, scale: 0.85, x: 10, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute right-3 top-3 z-[2] aspect-square w-24 overflow-hidden rounded-md border border-king-red/50 bg-king-black/80 shadow-[0_6px_24px_rgba(220,20,60,0.35)] md:w-32"
+                    aria-label="Preview estampa frente"
+                  >
+                    <img
+                      src={preview.cornerOverlay}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    <span className="absolute bottom-1 left-1 rounded bg-king-black/85 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.2em] text-king-red">
+                      Frente
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div className="absolute inset-0 shadow-inner-glow pointer-events-none" />
             </motion.div>
 
@@ -361,67 +425,84 @@ export default function ProductDetail() {
                 currentStepKey !== 'back' && 'hidden md:block'
               )}
             >
-              {stamp ? (
-                <motion.div
-                  layout
-                  className="flex items-center gap-4 border border-king-red/40 bg-king-red/[0.06] p-3 md:p-4"
-                >
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden bg-king-black/60 md:h-24 md:w-24">
-                    <img
-                      src={stamp.src}
-                      alt={stamp.name}
-                      className="max-h-full max-w-full object-contain"
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-sm uppercase tracking-[0.24em] text-king-fg sm:text-base md:text-lg">
+                  Estampa costas
+                </p>
+                {stamp && (
+                  <button
+                    type="button"
+                    onClick={() => setStamp(null)}
+                    className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+              {backOptions.length === 0 ? (
+                <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/60">
+                  Nenhuma estampa cadastrada ainda.
+                </p>
+              ) : (
+                <>
+                  {/* Desktop: grid com scroll interno */}
+                  <div
+                    data-lenis-prevent
+                    className="mt-3 hidden max-h-80 overflow-y-auto overscroll-y-contain rounded-md border border-white/10 bg-king-black/40 p-3 [html.light_&]:border-king-ink/15 [html.light_&]:bg-king-ink/5 md:block"
+                  >
+                    <div className="grid grid-cols-4 gap-3">
+                      {backOptions.map((opt) => {
+                        const active = stamp?.id === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setStamp(active ? null : opt)}
+                            className={cn(
+                              'group flex flex-col items-center gap-1.5 overflow-hidden rounded-md border p-2 transition',
+                              active
+                                ? 'border-king-red bg-king-red/[0.08] ring-1 ring-king-red/40'
+                                : 'border-white/10 bg-king-black/30 hover:border-king-red/50 [html.light_&]:border-king-ink/15 [html.light_&]:bg-white'
+                            )}
+                            title={opt.name}
+                          >
+                            <div className="flex h-20 w-full items-center justify-center">
+                              <img
+                                src={opt.src}
+                                alt={opt.name}
+                                loading="lazy"
+                                className="max-h-full max-w-full object-contain transition duration-300 group-hover:scale-[1.04]"
+                              />
+                            </div>
+                            <span className="line-clamp-2 w-full text-center font-mono text-[9px] uppercase leading-tight tracking-[0.18em] text-king-silver">
+                              {opt.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Mobile: carrossel 3 por página + preview embaixo */}
+                  <div className="mt-3 md:hidden">
+                    <StampCarousel
+                      items={backOptions.map((o) => ({ id: o.id, name: o.name, src: o.src }))}
+                      selectedId={stamp?.id ?? null}
+                      onSelect={(picked) => {
+                        if (!picked) return setStamp(null);
+                        const target = backOptions.find((o) => o.id === picked.id);
+                        if (!target) return;
+                        setStamp(stamp?.id === target.id ? null : target);
+                      }}
+                      pageSize={3}
+                    />
+                    <MobileStampPreview
+                      main={preview.main}
+                      productName={product.name}
+                      label={stamp ? 'Visualização com estampa' : 'Visualização atual'}
                     />
                   </div>
-                  <div className="flex flex-1 flex-col gap-1">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-red">
-                      Estampa costas
-                    </span>
-                    <span className="heading-display text-base text-king-fg md:text-lg">
-                      {stamp.name}
-                    </span>
-                    <div className="mt-1 flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={() => setStampOpen(true)}
-                        className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver transition hover:text-king-fg"
-                      >
-                        <HiOutlinePencilAlt /> Trocar
-                      </button>
-                      <button
-                        onClick={() => setStamp(null)}
-                        className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : (
-                <div className="pdp-stamp-cta-sweep">
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setStampOpen(true)}
-                    className="group flex w-full items-center justify-between gap-4 rounded-md border border-white/10 bg-king-black/92 p-4 text-left shadow-inner transition hover:border-king-red/40 hover:bg-king-red/[0.06] md:p-5"
-                  >
-                    <div className="flex items-center gap-3 md:gap-4">
-                      <Crown
-                        className={cn(
-                          'h-7 w-7 shrink-0 transition md:h-8 md:w-8',
-                          'text-white [html.light_&]:text-king-ink',
-                          'group-hover:text-white [html.light_&]:group-hover:text-white'
-                        )}
-                        strokeWidth={1.35}
-                        aria-hidden
-                      />
-                      <p className="font-mono text-sm uppercase leading-snug tracking-[0.22em] text-king-fg sm:text-base md:text-lg">
-                        Selecionar estampa (costas)
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-mono text-xs uppercase tracking-[0.28em] text-king-silver transition group-hover:text-king-red sm:text-sm">
-                      Abrir →
-                    </span>
-                  </motion.button>
-                </div>
+                </>
               )}
             </motion.div>
             )}
@@ -436,12 +517,25 @@ export default function ProductDetail() {
                 currentStepKey !== 'front' && 'hidden md:block'
               )}
             >
-              <p className="font-mono text-sm uppercase tracking-[0.24em] text-king-fg sm:text-base md:text-lg">
-                Estampa frente
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-sm uppercase tracking-[0.24em] text-king-fg sm:text-base md:text-lg">
+                  Estampa frente
+                </p>
+                {stampFront && (
+                  <button
+                    type="button"
+                    onClick={() => setStampFront(null)}
+                    className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red md:hidden"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+
+              {/* Desktop: grid normal */}
               <div
                 className={cn(
-                  'mt-3 grid gap-2 sm:gap-3',
+                  'mt-3 hidden gap-3 md:grid',
                   frontOptions.length === 1 && 'grid-cols-1',
                   frontOptions.length === 2 && 'grid-cols-2',
                   frontOptions.length >= 3 && 'grid-cols-3'
@@ -478,11 +572,46 @@ export default function ProductDetail() {
                   );
                 })}
               </div>
+
+              {/* Mobile: carrossel 2 por página + preview combinado embaixo */}
+              <div className="mt-3 md:hidden">
+                <StampCarousel
+                  items={frontOptions.map((o) => ({
+                    id: o.id,
+                    name: o.name.replace(/^KING · /, ''),
+                    src: o.src,
+                    imgExtraClass: o.id === FRONT_LOGO_PRETO_ID ? kingLogoPretoOnDarkImgClass : undefined,
+                  }))}
+                  selectedId={stampFront?.id ?? null}
+                  onSelect={(picked) => {
+                    if (!picked) return setStampFront(null);
+                    const target = frontOptions.find((o) => o.id === picked.id);
+                    if (!target) return;
+                    setStampFront(stampFront?.id === target.id ? null : target);
+                  }}
+                  pageSize={2}
+                />
+                <MobileStampPreview
+                  main={preview.main}
+                  cornerOverlay={preview.cornerOverlay}
+                  productName={product.name}
+                  label={
+                    stamp && stampFront
+                      ? 'Costas + frente'
+                      : stampFront
+                      ? 'Visualização com logo'
+                      : stamp
+                      ? 'Visualização costas'
+                      : 'Visualização atual'
+                  }
+                />
+              </div>
+
               {stampFront && (
                 <button
                   type="button"
                   onClick={() => setStampFront(null)}
-                  className="mt-3 font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red"
+                  className="mt-3 hidden font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver/70 transition hover:text-king-red md:inline-block"
                 >
                   Remover logo da frente
                 </button>
@@ -659,19 +788,208 @@ export default function ProductDetail() {
         )}
       </div>
 
-      <StampSelector
-        open={stampOpen}
-        onClose={() => setStampOpen(false)}
-        selectedId={stamp?.id ?? null}
-        onSelect={(s) => setStamp(s)}
-        headingNote="Verso da peça (costas)"
-        allowedStampIds={backStampIdsForModal}
-      />
-
       <MeasureGuideModal
         open={measureGuideOpen}
         onClose={() => setMeasureGuideOpen(false)}
       />
     </main>
+  );
+}
+
+type CarouselItem = { id: string; name: string; src: string; imgExtraClass?: string };
+
+function StampCarousel({
+  items,
+  selectedId,
+  onSelect,
+  pageSize,
+}: {
+  items: CarouselItem[];
+  selectedId: string | null;
+  onSelect: (item: CarouselItem | null) => void;
+  pageSize: number;
+}) {
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+
+  useEffect(() => {
+    if (page >= totalPages) setPage(0);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const idx = items.findIndex((i) => i.id === selectedId);
+    if (idx < 0) return;
+    const targetPage = Math.floor(idx / pageSize);
+    if (targetPage !== page) setPage(targetPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  const start = page * pageSize;
+  const visible = items.slice(start, start + pageSize);
+
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-stretch gap-2">
+        <button
+          type="button"
+          onClick={() => canPrev && setPage((p) => p - 1)}
+          disabled={!canPrev}
+          aria-label="Anterior"
+          className={cn(
+            'flex w-10 shrink-0 items-center justify-center rounded-md border transition',
+            canPrev
+              ? 'border-king-red/50 bg-king-red/10 text-king-red active:scale-95'
+              : 'border-white/10 text-king-silver/30'
+          )}
+        >
+          <HiArrowNarrowLeft className="text-lg" />
+        </button>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={page}
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ duration: 0.22 }}
+            className={cn(
+              'grid flex-1 gap-2',
+              pageSize === 2 && 'grid-cols-2',
+              pageSize === 3 && 'grid-cols-3',
+              pageSize === 4 && 'grid-cols-4'
+            )}
+          >
+            {visible.map((opt) => {
+              const active = selectedId === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onSelect(active ? null : opt)}
+                  className={cn(
+                    'group flex flex-col items-center gap-1.5 overflow-hidden rounded-md border p-2 transition',
+                    active
+                      ? 'border-king-red bg-king-red/[0.08] ring-1 ring-king-red/40'
+                      : 'border-white/10 bg-king-black/30 active:scale-[0.98] [html.light_&]:border-king-ink/15 [html.light_&]:bg-white'
+                  )}
+                  title={opt.name}
+                >
+                  <div className="flex h-16 w-full items-center justify-center">
+                    <img
+                      src={opt.src}
+                      alt={opt.name}
+                      loading="lazy"
+                      className={cn(
+                        'max-h-full max-w-[88%] object-contain',
+                        opt.imgExtraClass
+                      )}
+                    />
+                  </div>
+                  <span className="line-clamp-2 w-full text-center font-mono text-[9px] uppercase leading-tight tracking-[0.18em] text-king-silver">
+                    {opt.name}
+                  </span>
+                </button>
+              );
+            })}
+            {/* placeholders pra manter grid alinhado quando última página tem menos itens */}
+            {visible.length < pageSize &&
+              Array.from({ length: pageSize - visible.length }).map((_, i) => (
+                <div key={`ph-${i}`} aria-hidden className="invisible" />
+              ))}
+          </motion.div>
+        </AnimatePresence>
+
+        <button
+          type="button"
+          onClick={() => canNext && setPage((p) => p + 1)}
+          disabled={!canNext}
+          aria-label="Próximo"
+          className={cn(
+            'flex w-10 shrink-0 items-center justify-center rounded-md border transition',
+            canNext
+              ? 'border-king-red/50 bg-king-red/10 text-king-red active:scale-95'
+              : 'border-white/10 text-king-silver/30'
+          )}
+        >
+          <HiArrowNarrowLeft className="rotate-180 text-lg" />
+        </button>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1.5">
+          {Array.from({ length: totalPages }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Página ${i + 1}`}
+              onClick={() => setPage(i)}
+              className={cn(
+                'h-1.5 rounded-full transition-all',
+                i === page ? 'w-6 bg-king-red' : 'w-2 bg-white/20'
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileStampPreview({
+  main,
+  cornerOverlay,
+  productName,
+  label,
+}: {
+  main: string;
+  cornerOverlay?: string | null;
+  productName: string;
+  label: string;
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-2">
+      <span className="font-mono text-[9px] uppercase tracking-[0.28em] text-king-silver">
+        {label}
+      </span>
+      <div className="relative mx-auto aspect-[3/4] w-full max-w-xs overflow-hidden rounded-md border border-white/10 [html.light_&]:border-king-ink/15">
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={main}
+            src={main}
+            alt={productName}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </AnimatePresence>
+        <AnimatePresence>
+          {cornerOverlay && (
+            <motion.div
+              key={cornerOverlay}
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ duration: 0.3 }}
+              className="absolute right-2 top-2 aspect-square w-16 overflow-hidden rounded-md border border-king-red/50 bg-king-black/80 shadow-[0_4px_16px_rgba(220,20,60,0.35)]"
+            >
+              <img
+                src={cornerOverlay}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute bottom-0.5 left-0.5 rounded bg-king-black/85 px-1 font-mono text-[7px] uppercase tracking-[0.2em] text-king-red">
+                Frente
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }

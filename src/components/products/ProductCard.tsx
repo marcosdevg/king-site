@@ -42,7 +42,7 @@ export default function ProductCard({ product, index = 0 }: Props) {
         className="product-card group block"
         data-cursor="hover"
       >
-        <div className="relative aspect-[3/4] overflow-hidden bg-king-graphite">
+        <div className="relative aspect-[3/4] overflow-hidden">
           <img
             src={img1}
             alt={product.name}

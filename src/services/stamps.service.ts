@@ -1,15 +1,32 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '@/services/firebase';
 
 const COLLECTION = 'stamps';
+
+export function normalizeCustomId(raw: string): string {
+  return (raw || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 60);
+}
+
+export function isValidCustomId(raw: string): boolean {
+  const id = normalizeCustomId(raw);
+  return id.length >= 3 && id.length <= 60 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(id);
+}
 
 export type StampSide = 'back' | 'front';
 
@@ -54,15 +71,27 @@ export async function listStamps(): Promise<FirestoreStampDoc[]> {
   return list;
 }
 
-export async function createStamp(input: StampInput): Promise<string> {
-  const ref = await addDoc(collection(db, COLLECTION), {
+export async function createStamp(
+  input: StampInput,
+  customId: string
+): Promise<string> {
+  const id = normalizeCustomId(customId);
+  if (!isValidCustomId(id)) {
+    throw new Error('ID inválido. Use 3-60 caracteres: letras minúsculas, números e hífens.');
+  }
+  const ref = doc(db, COLLECTION, id);
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    throw new Error('Já existe uma estampa com esse ID. Escolha outro.');
+  }
+  await setDoc(ref, {
     name: input.name.trim(),
     coleção: normalizeColeção(input.coleção),
     side: input.side,
     imageUrl: input.imageUrl,
     createdAt: serverTimestamp(),
   });
-  return ref.id;
+  return id;
 }
 
 export async function updateStamp(

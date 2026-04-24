@@ -6,7 +6,9 @@ import { HiOutlinePencil, HiOutlineTrash, HiOutlineUpload, HiOutlineX } from 're
 import {
   createStamp,
   deleteStamp,
+  isValidCustomId,
   listStamps,
+  normalizeCustomId,
   updateStamp,
   type FirestoreStampDoc,
   type StampSide,
@@ -210,6 +212,7 @@ function StampEditorModal({
   const [coleção, setColeção] = useState(initial?.coleção ?? '');
   const [side, setSide] = useState<StampSide>(initial?.side ?? 'back');
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? '');
+  const [customId, setCustomId] = useState<string>(initial?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -255,6 +258,10 @@ function StampEditorModal({
   }, []);
 
   const submit = async () => {
+    if (mode === 'create' && !isValidCustomId(customId)) {
+      toast.error('ID único inválido (3-60 caracteres, letras minúsculas, números e hífens)');
+      return;
+    }
     if (!name.trim()) {
       toast.error('Informe o nome da estampa');
       return;
@@ -266,12 +273,15 @@ function StampEditorModal({
     setSaving(true);
     try {
       if (mode === 'create') {
-        await createStamp({
-          name: name.trim(),
-          coleção: coleção.trim(),
-          side,
-          imageUrl: imageUrl.trim(),
-        });
+        await createStamp(
+          {
+            name: name.trim(),
+            coleção: coleção.trim(),
+            side,
+            imageUrl: imageUrl.trim(),
+          },
+          customId
+        );
         toast.success('Estampa criada');
       } else if (initial) {
         await updateStamp(initial.id, {
@@ -283,8 +293,9 @@ function StampEditorModal({
         toast.success('Estampa atualizada');
       }
       await onSaved();
-    } catch {
-      toast.error('Erro ao gravar no Firestore');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao gravar no Firestore';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -332,6 +343,31 @@ function StampEditorModal({
           </datalist>
 
           <div className="space-y-5">
+            {mode === 'create' ? (
+              <label className="flex flex-col gap-2 rounded-md border border-king-red/25 bg-king-red/[0.04] p-3">
+                <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-king-red">
+                  ID único *
+                </span>
+                <input
+                  value={customId}
+                  onChange={(e) => setCustomId(normalizeCustomId(e.target.value))}
+                  className="input-king-panel font-mono tracking-[0.1em]"
+                  placeholder="ex.: cruz-sagrada-costas"
+                />
+                <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-king-silver/70">
+                  3-60 caracteres · letras minúsculas, números e hífens · não repetível
+                </span>
+              </label>
+            ) : initial ? (
+              <div className="rounded-md border border-white/10 bg-king-black/30 p-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver/70">
+                  ID (não editável)
+                </p>
+                <p className="mt-1 font-mono text-sm tracking-[0.1em] text-king-fg">
+                  {initial.id}
+                </p>
+              </div>
+            ) : null}
             <label className="flex flex-col gap-2">
               <span className="font-mono text-[10px] uppercase tracking-[0.28em] text-king-silver">
                 Nome na loja

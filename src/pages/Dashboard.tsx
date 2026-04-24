@@ -192,7 +192,7 @@ export default function Dashboard() {
                       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         {order.items.map((item, j) => (
                           <li key={j} className="flex items-center gap-3">
-                            <div className="h-16 w-14 shrink-0 overflow-hidden bg-king-graphite">
+                            <div className="h-16 w-14 shrink-0 overflow-hidden">
                               <img src={item.image} alt="" className="h-full w-full object-cover" />
                             </div>
                             <div className="min-w-0">
