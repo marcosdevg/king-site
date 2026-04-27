@@ -47,6 +47,8 @@ export default function ProductDetail() {
   const [stampFront, setStampFront] = useState<FrontLogoStamp | null>(null);
   const [measureGuideOpen, setMeasureGuideOpen] = useState(false);
   const [mobileStep, setMobileStep] = useState(1);
+  /** Quando há miniatura de frente + principal de costas, alterna qual ocupa cada papel. */
+  const [gallerySwapFrontBack, setGallerySwapFrontBack] = useState(false);
 
   const mergedFront = useStampsStore((s) => s.mergedFront);
   const mergedBack = useStampsStore((s) => s.mergedBack);
@@ -106,6 +108,36 @@ export default function ProductDetail() {
     }
     return { main: fallback, cornerOverlay: null };
   }, [product, selectedImage, stamp, stampFront]);
+
+  useEffect(() => {
+    setGallerySwapFrontBack(false);
+  }, [stamp?.id, stampFront?.id, selectedImage, product?.id]);
+
+  const galleryDisplay = useMemo(() => {
+    const canSwap = Boolean(preview.cornerOverlay && preview.main);
+    if (!canSwap) {
+      return {
+        main: preview.main,
+        corner: preview.cornerOverlay,
+        cornerBadge: 'Frente' as const,
+        canSwap: false,
+      };
+    }
+    if (gallerySwapFrontBack) {
+      return {
+        main: preview.cornerOverlay!,
+        corner: preview.main,
+        cornerBadge: 'Costas' as const,
+        canSwap: true,
+      };
+    }
+    return {
+      main: preview.main,
+      corner: preview.cornerOverlay,
+      cornerBadge: 'Frente' as const,
+      canSwap: true,
+    };
+  }, [preview, gallerySwapFrontBack]);
 
   const mobileSteps = useMemo(() => {
     const steps: Array<'info' | 'back' | 'front'> = ['info'];
@@ -307,8 +339,8 @@ export default function ProductDetail() {
             >
               <AnimatePresence mode="wait">
                 <motion.img
-                  key={preview.main}
-                  src={preview.main}
+                  key={galleryDisplay.main}
+                  src={galleryDisplay.main}
                   alt={product.name}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -318,25 +350,33 @@ export default function ProductDetail() {
                 />
               </AnimatePresence>
               <AnimatePresence>
-                {preview.cornerOverlay && (
-                  <motion.div
-                    key={preview.cornerOverlay}
+                {galleryDisplay.corner && (
+                  <motion.button
+                    type="button"
+                    key={galleryDisplay.corner}
                     initial={{ opacity: 0, scale: 0.85, x: 10, y: -10 }}
                     animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                     exit={{ opacity: 0, scale: 0.85 }}
                     transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute right-3 top-3 z-[2] aspect-square w-24 overflow-hidden rounded-md border border-king-red/50 bg-king-black/80 shadow-[0_6px_24px_rgba(220,20,60,0.35)] md:w-32"
-                    aria-label="Preview estampa frente"
+                    onClick={() =>
+                      galleryDisplay.canSwap && setGallerySwapFrontBack((s) => !s)
+                    }
+                    aria-label="Alternar entre vista principal e miniatura (frente e costas)"
+                    className={cn(
+                      'absolute right-3 top-3 z-[2] aspect-square w-24 overflow-hidden rounded-md border border-king-red/50 bg-king-black/80 text-left shadow-[0_6px_24px_rgba(220,20,60,0.35)] md:w-32',
+                      galleryDisplay.canSwap &&
+                        'cursor-pointer transition hover:border-king-red focus:outline-none focus-visible:ring-2 focus-visible:ring-king-red focus-visible:ring-offset-2 focus-visible:ring-offset-king-black'
+                    )}
                   >
                     <img
-                      src={preview.cornerOverlay}
+                      src={galleryDisplay.corner}
                       alt=""
                       className="h-full w-full object-cover"
                     />
                     <span className="absolute bottom-1 left-1 rounded bg-king-black/85 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.2em] text-king-red">
-                      Frente
+                      {galleryDisplay.cornerBadge}
                     </span>
-                  </motion.div>
+                  </motion.button>
                 )}
               </AnimatePresence>
               <div className="absolute inset-0 shadow-inner-glow pointer-events-none" />
@@ -551,8 +591,14 @@ export default function ProductDetail() {
                   pageSize={2}
                 />
                 <MobileStampPreview
-                  main={preview.main}
-                  cornerOverlay={preview.cornerOverlay}
+                  main={galleryDisplay.main}
+                  cornerOverlay={galleryDisplay.corner}
+                  cornerBadge={galleryDisplay.cornerBadge}
+                  onCornerClick={
+                    galleryDisplay.canSwap
+                      ? () => setGallerySwapFrontBack((s) => !s)
+                      : undefined
+                  }
                   productName={product.name}
                   label={
                     stamp && stampFront
@@ -906,14 +952,27 @@ function StampCarousel({
 function MobileStampPreview({
   main,
   cornerOverlay,
+  cornerBadge = 'Frente',
+  onCornerClick,
   productName,
   label,
 }: {
   main: string;
   cornerOverlay?: string | null;
+  cornerBadge?: string;
+  onCornerClick?: () => void;
   productName: string;
   label: string;
 }) {
+  const CornerWrapper = onCornerClick ? motion.button : motion.div;
+  const cornerExtraProps = onCornerClick
+    ? {
+        type: 'button' as const,
+        onClick: onCornerClick,
+        'aria-label': 'Alternar entre vista principal e miniatura (frente e costas)',
+      }
+    : {};
+
   return (
     <div className="mt-4 flex flex-col gap-2">
       <span className="font-mono text-[9px] uppercase tracking-[0.28em] text-king-silver">
@@ -934,13 +993,18 @@ function MobileStampPreview({
         </AnimatePresence>
         <AnimatePresence>
           {cornerOverlay && (
-            <motion.div
+            <CornerWrapper
               key={cornerOverlay}
               initial={{ opacity: 0, scale: 0.85 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.85 }}
               transition={{ duration: 0.3 }}
-              className="absolute right-2 top-2 aspect-square w-16 overflow-hidden rounded-md border border-king-red/50 bg-king-black/80 shadow-[0_4px_16px_rgba(220,20,60,0.35)]"
+              {...cornerExtraProps}
+              className={cn(
+                'absolute right-2 top-2 aspect-square w-16 overflow-hidden rounded-md border border-king-red/50 bg-king-black/80 text-left shadow-[0_4px_16px_rgba(220,20,60,0.35)]',
+                onCornerClick &&
+                  'cursor-pointer transition hover:border-king-red focus:outline-none focus-visible:ring-2 focus-visible:ring-king-red focus-visible:ring-offset-2 focus-visible:ring-offset-king-black'
+              )}
             >
               <img
                 src={cornerOverlay}
@@ -948,9 +1012,9 @@ function MobileStampPreview({
                 className="h-full w-full object-cover"
               />
               <span className="absolute bottom-0.5 left-0.5 rounded bg-king-black/85 px-1 font-mono text-[7px] uppercase tracking-[0.2em] text-king-red">
-                Frente
+                {cornerBadge}
               </span>
-            </motion.div>
+            </CornerWrapper>
           )}
         </AnimatePresence>
       </div>
