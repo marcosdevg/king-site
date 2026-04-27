@@ -115,7 +115,7 @@ router.post('/create-payment-intent', async (req: Request, res: Response) => {
         const db = getAdminFirestore();
         if (db) {
           const check = await assertInventoryAvailable(db, parsed);
-          if (!check.ok) {
+          if (check.ok === false) {
             res.status(409).json({ error: check.message });
             return;
           }

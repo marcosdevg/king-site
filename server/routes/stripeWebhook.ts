@@ -60,7 +60,7 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
   const db = getAdminFirestore();
   if (db && invJson && invJson !== '[]') {
     const inv = await applyInventoryDeduction(db, pi.id, invJson);
-    if (!inv.ok) {
+    if (inv.ok === false) {
       console.error(
         '[stripe-webhook] Baixa de estoque falhou (venda já paga — rever manualmente):',
         inv.error
