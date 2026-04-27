@@ -339,6 +339,20 @@ function InnerForm({
           PI: {paymentIntentId.slice(-6)}
         </span>
       </div>
+      <p
+        className={cn(
+          'font-serif text-[11px] italic leading-relaxed sm:text-xs',
+          theme === 'light' ? 'text-king-fg/55' : 'text-king-silver/50'
+        )}
+      >
+        O seletor de parcelas depende do cartão (BIN / emissor) e da configuração da loja na
+        Stripe (conta com parcelamento ativo para Brasil). Em modo de teste, o Visa com emissão
+        BR da documentação Stripe é{' '}
+        <span className="whitespace-nowrap font-mono not-italic tracking-tight text-king-silver/70">
+          4000&nbsp;0007&nbsp;6000&nbsp;0002
+        </span>
+        ; muitos outros cartões de teste só permitem pagamento à vista.
+      </p>
 
       <div className="flex justify-end">
         <GlowButton

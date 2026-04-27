@@ -62,18 +62,19 @@ router.post('/create-payment-intent', async (req: Request, res: Response) => {
       subtotal,
       shippingCost,
       discount = 0,
-      currency = 'brl',
       metadata = {},
       inventoryLines,
     } = (req.body ?? {}) as {
       subtotal?: number;
       shippingCost?: number;
       discount?: number;
-      currency?: string;
       metadata?: Record<string, string>;
       /** Linhas de estoque: [[productId, qty, backStampId, frontStampId], …] */
       inventoryLines?: unknown;
     };
+
+    /** Mercado único: Brasil (BRL). Ignora qualquer `currency` enviada pelo cliente. */
+    const currency = 'brl';
 
     if (typeof subtotal !== 'number' || subtotal <= 0) {
       res.status(400).json({ error: 'subtotal inválido' });
@@ -95,7 +96,7 @@ router.post('/create-payment-intent', async (req: Request, res: Response) => {
       return;
     }
 
-    const safeMeta: Record<string, string> = { ...metadata };
+    const safeMeta: Record<string, string> = { ...metadata, king_market: 'BR' };
     for (const k of Object.keys(safeMeta)) {
       if (k === 'king_inv' || k.startsWith('king_inv_')) delete safeMeta[k];
     }
@@ -129,10 +130,12 @@ router.post('/create-payment-intent', async (req: Request, res: Response) => {
     }
 
     /**
-     * Tipos explícitos + parcelas no cartão: com `automatic_payment_methods`, a Stripe
-     * recomenda não definir `installments.enabled` (conflito com “dynamic payment methods”),
-     * o que pode impedir o seletor de parcelas no Payment Element.
-     * @see https://docs.stripe.com/payments/meses-sin-intereses/accept-a-payment (Payment Element + installments)
+     * Parcelas no cartão (BR): `installments.enabled` permite ao Payment Element mostrar o
+     * seletor quando a Stripe/adquirente oferecer planos para aquele BIN e conta.
+     * Não confundir com “meses sin intereses” (México) — no Brasil depende de conta Stripe
+     * com captura no país, método cartão ativo e regras do emissor/valor mínimo.
+     * Cartão de teste com emissão BR (documentação Stripe): 4000000760000002 (Visa).
+     * Com `automatic_payment_methods`, a Stripe desaconselha definir installments aqui.
      */
     const intent = await getStripe().paymentIntents.create({
       amount: amountCents,

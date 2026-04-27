@@ -216,6 +216,9 @@ export default function Checkout() {
           <h1 className="mt-2 heading-display text-5xl md:text-6xl text-king-fg">
             CHECKOUT
           </h1>
+          <p className="mt-3 max-w-xl font-mono text-[10px] uppercase leading-relaxed tracking-[0.22em] text-king-silver/80 sm:text-[11px] sm:tracking-[0.26em]">
+            Envio e venda apenas no Brasil · preços em real (BRL)
+          </p>
         </div>
 
         <div className="mb-10 flex items-center gap-4">
@@ -260,7 +263,7 @@ export default function Checkout() {
                           Teu endereço
                         </h3>
                         <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-king-silver/70">
-                          Guardado neste dispositivo · CEP para cotar o frete
+                          Guardado neste dispositivo · CEP para cotar o frete · só Brasil
                         </p>
                       </div>
                       <button
@@ -298,9 +301,12 @@ export default function Checkout() {
                   </>
                 ) : (
                   <>
-                    <h3 className="heading-display mb-6 text-xl text-king-fg">
+                    <h3 className="heading-display text-xl text-king-fg">
                       Endereço de entrega
                     </h3>
+                    <p className="mb-6 mt-1 font-serif text-sm italic text-king-silver/65">
+                      Endereço nacional (CEP brasileiro) — não enviamos para o exterior.
+                    </p>
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <Field
                         label="Nome completo"
@@ -370,9 +376,12 @@ export default function Checkout() {
 
             {step === 2 && (
               <>
-                <h3 className="heading-display mb-6 text-xl text-king-fg">
+                <h3 className="heading-display text-xl text-king-fg">
                   Forma de pagamento
                 </h3>
+                <p className="mb-6 mt-1 font-serif text-sm italic text-king-silver/65">
+                  Cobrança em real (BRL), métodos para compradores no Brasil.
+                </p>
 
                 <StripePaymentForm
                   subtotal={total}
