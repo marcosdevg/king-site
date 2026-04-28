@@ -1,25 +1,11 @@
 import { Router, type Request, type Response } from 'express';
-import { getStripe } from '../lib/stripe.js';
 import { handleQuote } from '../lib/superfrete.js';
 import { sendN8nTestNotification } from '../lib/n8nNotify.js';
 import { getEmailFromFirebaseIdToken, isAdminEmail } from '../lib/verifyAdminToken.js';
-import { getAdminFirestore } from '../lib/firebaseAdmin.js';
-import {
-  assertInventoryAvailable,
-  attachInventoryToStripeMetadata,
-  buildCompactLinesFromUnknown,
-  serializeInventoryLines,
-} from '../lib/kingInventory.js';
 
 const router = Router();
 
 router.post('/shipping', handleQuote);
-
-router.get('/config', (_req, res) => {
-  res.json({
-    publishableKey: process.env.STRIPE_PUBLISH_KEY ?? '',
-  });
-});
 
 /**
  * Admin (KPIs): envia payload de teste ao n8n, igual ao fluxo pós-venda (WhatsApp).
@@ -48,120 +34,6 @@ router.post('/test-n8n-notify', async (req: Request, res: Response) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Falha ao notificar n8n';
     console.error('[test-n8n-notify]', msg);
-    res.status(500).json({ error: msg });
-  }
-});
-
-/**
- * Cria um PaymentIntent. O valor é recalculado aqui no servidor a partir de subtotal + shippingCost
- * (não confie no total vindo do cliente).
- */
-router.post('/create-payment-intent', async (req: Request, res: Response) => {
-  try {
-    const {
-      subtotal,
-      shippingCost,
-      discount = 0,
-      metadata = {},
-      inventoryLines,
-    } = (req.body ?? {}) as {
-      subtotal?: number;
-      shippingCost?: number;
-      discount?: number;
-      metadata?: Record<string, string>;
-      /** Linhas de estoque: [[productId, qty, backStampId, frontStampId], …] */
-      inventoryLines?: unknown;
-    };
-
-    /** Mercado único: Brasil (BRL). Ignora qualquer `currency` enviada pelo cliente. */
-    const currency = 'brl';
-
-    if (typeof subtotal !== 'number' || subtotal <= 0) {
-      res.status(400).json({ error: 'subtotal inválido' });
-      return;
-    }
-    if (typeof shippingCost !== 'number' || shippingCost < 0) {
-      res.status(400).json({ error: 'shippingCost inválido' });
-      return;
-    }
-    const safeDiscount =
-      typeof discount === 'number' && discount > 0 && discount < subtotal
-        ? discount
-        : 0;
-
-    const payable = Math.max(0, subtotal - safeDiscount) + shippingCost;
-    const amountCents = Math.round(payable * 100);
-    if (amountCents < 50) {
-      res.status(400).json({ error: 'Valor mínimo não atingido' });
-      return;
-    }
-
-    const safeMeta: Record<string, string> = { ...metadata, king_market: 'BR' };
-    for (const k of Object.keys(safeMeta)) {
-      if (k === 'king_inv' || k.startsWith('king_inv_')) delete safeMeta[k];
-    }
-
-    let inventoryJson: string | null = null;
-    if (inventoryLines !== undefined && inventoryLines !== null) {
-      if (!Array.isArray(inventoryLines)) {
-        res.status(400).json({ error: 'inventoryLines inválido' });
-        return;
-      }
-      if (inventoryLines.length > 0) {
-        const parsed = buildCompactLinesFromUnknown(inventoryLines);
-        if (!parsed) {
-          res.status(400).json({ error: 'Formato de inventoryLines inválido' });
-          return;
-        }
-        const db = getAdminFirestore();
-        if (db) {
-          const check = await assertInventoryAvailable(db, parsed);
-          if (check.ok === false) {
-            res.status(409).json({ error: check.message });
-            return;
-          }
-        } else {
-          console.warn(
-            '[checkout] FIREBASE_SERVICE_ACCOUNT_JSON ausente — não foi possível validar estoque antes do pagamento'
-          );
-        }
-        inventoryJson = serializeInventoryLines(parsed);
-      }
-    }
-
-    /**
-     * Métodos de pagamento dinâmicos (recomendado pela Stripe para o Payment Element):
-     * sem `payment_method_types` fixos — o que aparece (cartão, Apple/Google Pay, etc.) vem do
-     * Dashboard (Definições → Métodos de pagamento) + moeda BRL + país da conta.
-     * Com `automatic_payment_methods`, a Stripe trata parcelas e elegibilidade no Payment Element.
-     * @see https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods
-     */
-    const intent = await getStripe().paymentIntents.create({
-      amount: amountCents,
-      currency,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'always',
-      },
-      metadata: attachInventoryToStripeMetadata(
-        {
-          ...safeMeta,
-          subtotal_brl: subtotal.toFixed(2),
-          shipping_brl: shippingCost.toFixed(2),
-          discount_brl: safeDiscount.toFixed(2),
-        },
-        inventoryJson ?? '[]'
-      ),
-    });
-
-    res.json({
-      clientSecret: intent.client_secret,
-      paymentIntentId: intent.id,
-      amount: amountCents,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Erro ao criar PaymentIntent';
-    console.error('[stripe] create-payment-intent error', msg);
     res.status(500).json({ error: msg });
   }
 });

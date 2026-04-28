@@ -14,7 +14,7 @@ import {
 } from '@/services/orders.service';
 import { cn } from '@/utils/cn';
 import ShippingQuoteBox from '@/components/checkout/ShippingQuoteBox';
-import StripePaymentForm from '@/components/checkout/StripePaymentForm';
+import MPCardForm from '@/components/checkout/MPCardForm';
 import PixPaymentForm from '@/components/checkout/PixPaymentForm';
 import PostCheckoutModal from '@/components/checkout/PostCheckoutModal';
 import CouponField, { type AppliedCoupon } from '@/components/checkout/CouponField';
@@ -31,12 +31,11 @@ export default function Checkout() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
-  const [submitting, setSubmitting] = useState(false);
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
-  const [pixOrderId, setPixOrderId] = useState<string | null>(null);
-  const [pixCreating, setPixCreating] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [creatingOrder, setCreatingOrder] = useState(false);
   const [post, setPost] = useState<{
     orderId: string;
     total: number;
@@ -172,71 +171,14 @@ export default function Checkout() {
     };
   };
 
-  const handlePaid = async (paymentIntentId: string) => {
-    if (!user || !selectedShipping) return;
-    setSubmitting(true);
-    try {
-      const { shippingService, orderCoupon, items: orderItems } = buildBaseOrder();
-      const orderId = await createOrder({
-        userId: user.uid,
-        userEmail: user.email ?? '',
-        items: orderItems,
-        subtotal: total,
-        shippingCost,
-        discount: discountAmount,
-        coupon: orderCoupon,
-        total: final,
-        status: 'confirmado',
-        shipping,
-        shippingService,
-        paymentMethod: 'card',
-        paymentIntentId,
-        paymentStatus: 'paid',
-      });
-
-      if (orderCoupon) {
-        void incrementCouponUsage(orderCoupon.id);
-      }
-
-      toast.success('Pedido confirmado! A realeza agradece.');
-      clear();
-      setPost({
-        orderId,
-        total: final,
-        shippingName: selectedShipping.name,
-      });
-    } catch (err) {
-      console.error(err);
-      toast.error('Pagamento aprovado mas não salvamos o pedido. Contate a KING.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  /** Quando o webhook MP marca o pedido como pago, finalizamos a UX (cart, modal, cupom). */
-  const handlePixPaid = async () => {
-    if (!pixOrderId || !selectedShipping) return;
-    if (coupon) {
-      void incrementCouponUsage(coupon.id);
-    }
-    toast.success('Pagamento confirmado!');
-    clear();
-    setPost({
-      orderId: pixOrderId,
-      total: final,
-      shippingName: selectedShipping.name,
-    });
-    setPixOrderId(null);
-  };
-
-  /** Cria o pedido no Firestore com paymentStatus 'pending' antes de gerar o QR PIX. */
-  const ensurePixOrder = async (): Promise<string | null> => {
-    if (pixOrderId) return pixOrderId;
+  /** Cria o pedido em Firestore com paymentStatus 'pending' (compartilhado por PIX e cartão). */
+  const ensureOrder = async (method: 'card' | 'pix'): Promise<string | null> => {
+    if (pendingOrderId) return pendingOrderId;
     if (!user || !selectedShipping) {
       toast.error('Faltam dados pra finalizar');
       return null;
     }
-    setPixCreating(true);
+    setCreatingOrder(true);
     try {
       const { shippingService, orderCoupon, items: orderItems } = buildBaseOrder();
       const orderId = await createOrder({
@@ -251,19 +193,36 @@ export default function Checkout() {
         status: 'pendente',
         shipping,
         shippingService,
-        paymentMethod: 'pix',
+        paymentMethod: method,
         paymentIntentId: null,
         paymentStatus: 'pending',
+        inventoryLines: JSON.stringify(inventoryLines ?? []),
       });
-      setPixOrderId(orderId);
+      setPendingOrderId(orderId);
       return orderId;
     } catch (err) {
       console.error(err);
       toast.error('Erro ao registrar pedido. Tente novamente.');
       return null;
     } finally {
-      setPixCreating(false);
+      setCreatingOrder(false);
     }
+  };
+
+  /** Disparado quando o backend (cartão sync) ou listener (PIX/card pending) confirma pagamento. */
+  const handlePaid = async () => {
+    if (!pendingOrderId || !selectedShipping) return;
+    if (coupon) {
+      void incrementCouponUsage(coupon.id);
+    }
+    toast.success('Pagamento confirmado!');
+    clear();
+    setPost({
+      orderId: pendingOrderId,
+      total: final,
+      shippingName: selectedShipping.name,
+    });
+    setPendingOrderId(null);
   };
 
   const closePost = () => {
@@ -453,9 +412,7 @@ export default function Checkout() {
                       type="button"
                       onClick={() => {
                         setPaymentMethod(m);
-                        if (m === 'pix') {
-                          void ensurePixOrder();
-                        }
+                        void ensureOrder(m);
                       }}
                       className={cn(
                         'flex-1 border px-4 py-3 font-mono text-[11px] uppercase tracking-[0.3em] transition',
@@ -470,38 +427,30 @@ export default function Checkout() {
                 </div>
 
                 <div className="mt-6">
-                  {paymentMethod === 'card' ? (
-                    <StripePaymentForm
-                      subtotal={total}
-                      shippingCost={shippingCost}
-                      discount={discountAmount}
-                      total={final}
-                      disabled={submitting}
-                      onPaid={handlePaid}
-                      inventoryLines={inventoryLines}
-                      metadata={{
-                        userEmail: user?.email ?? '',
-                        customer: shipping.fullName,
-                        shipping_service: selectedShipping?.name ?? '',
-                        shipping_zip: shipping.zip,
-                        coupon: coupon?.code ?? '',
-                      }}
-                    />
-                  ) : pixCreating && !pixOrderId ? (
+                  {creatingOrder && !pendingOrderId ? (
                     <div className="flex flex-col items-center gap-3 py-12">
                       <div className="spinner-crown" />
                       <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver">
                         Registrando pedido…
                       </p>
                     </div>
+                  ) : paymentMethod === 'card' ? (
+                    <MPCardForm
+                      amount={final}
+                      orderId={pendingOrderId}
+                      ensureOrder={() => ensureOrder('card')}
+                      payerFirstName={shipping.fullName.split(' ')[0]}
+                      payerLastName={shipping.fullName.split(' ').slice(1).join(' ')}
+                      onPaid={handlePaid}
+                    />
                   ) : (
                     <PixPaymentForm
-                      orderId={pixOrderId}
+                      orderId={pendingOrderId}
                       total={final}
                       description={`Pedido KING ${shipping.fullName}`.slice(0, 50)}
                       payerFirstName={shipping.fullName.split(' ')[0]}
                       payerLastName={shipping.fullName.split(' ').slice(1).join(' ')}
-                      onPaid={handlePixPaid}
+                      onPaid={handlePaid}
                     />
                   )}
                 </div>

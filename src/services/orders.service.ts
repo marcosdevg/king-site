@@ -100,8 +100,19 @@ export interface Order {
   shipping: Shipping;
   shippingService?: ShippingService | null;
   paymentMethod: PaymentMethod;
+  /** Stripe legacy. */
   paymentIntentId?: string | null;
+  /** Mercado Pago — id da transação. */
+  mpPaymentId?: number | string | null;
+  /** Status interno do MP (`approved`, `pending`, `rejected`, etc.). */
+  mpStatus?: string | null;
   paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
+  paidAt?: string | null;
+  installments?: number | null;
+  /** JSON serializado das linhas pra baixa de estoque (usado pelo webhook MP). */
+  inventoryLines?: string;
+  /** Marca que o estoque já foi descontado (idempotência client-side). */
+  inventoryDeducted?: boolean;
   createdAt?: unknown;
 }
 

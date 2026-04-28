@@ -46,7 +46,7 @@ export default function PixPaymentForm({
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
 
-  // 1) Cria o pagamento PIX no MP via /api/pix/create.
+  // 1) Cria o pagamento PIX no MP via /api/mp/pix/create.
   useEffect(() => {
     if (!orderId) return;
     let cancelled = false;
@@ -57,7 +57,7 @@ export default function PixPaymentForm({
         const u = auth.currentUser;
         if (!u) throw new Error('Sessão expirada — entre novamente.');
         const idToken = await u.getIdToken();
-        const res = await fetch('/api/pix/create', {
+        const res = await fetch('/api/mp/pix/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -121,7 +121,7 @@ export default function PixPaymentForm({
         const u = auth.currentUser;
         if (!u) return;
         const idToken = await u.getIdToken();
-        await fetch(`/api/pix/status?orderId=${encodeURIComponent(orderId)}`, {
+        await fetch(`/api/mp/pix/status?orderId=${encodeURIComponent(orderId)}`, {
           headers: { Authorization: `Bearer ${idToken}` },
         });
       } catch {

@@ -131,7 +131,7 @@ export function openShippingLabel(order: Order): void {
     </div>
 
     <div class="footer">
-      KING · ${escapeHtml(order.userEmail)} · Pedido gerado automaticamente — pagamento confirmado via Stripe
+      KING · ${escapeHtml(order.userEmail)} · Pedido gerado automaticamente — pagamento confirmado via Mercado Pago
     </div>
   </div>
   <script>

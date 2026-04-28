@@ -34,7 +34,7 @@ function waPhone(phone: string): string {
 type Props = {
   order: Order;
   onStatusChange: (id: string, status: OrderStatus) => void;
-  /** Quando definido, permite alinhar o Firestore ao estorno/recusa na Stripe (remarketing nos KPIs). */
+  /** Quando definido, permite alinhar o Firestore ao estorno/recusa do gateway (remarketing nos KPIs). */
   onPaymentStatusChange?: (id: string, paymentStatus: Order['paymentStatus']) => void;
 };
 
@@ -42,7 +42,7 @@ const PAYMENT_STATUS_SELECT: { value: NonNullable<Order['paymentStatus']>; label
   { value: 'pending', label: 'Pagamento pendente' },
   { value: 'paid', label: 'Pago' },
   { value: 'failed', label: 'Recusado' },
-  { value: 'refunded', label: 'Estornado (Stripe)' },
+  { value: 'refunded', label: 'Estornado' },
 ];
 
 export default function OrderCard({ order, onStatusChange, onPaymentStatusChange }: Props) {
@@ -120,7 +120,7 @@ export default function OrderCard({ order, onStatusChange, onPaymentStatusChange
                   e.target.value as NonNullable<Order['paymentStatus']>
                 )
               }
-              title="Alinhar com o painel Stripe (estorno, chargeback, falha)"
+              title="Alinhar com o painel Mercado Pago (estorno, chargeback, falha)"
               className="select-king-dark max-w-[11rem] font-mono text-[10px] uppercase tracking-[0.2em]"
             >
               {PAYMENT_STATUS_SELECT.map((s) => (
@@ -206,11 +206,11 @@ export default function OrderCard({ order, onStatusChange, onPaymentStatusChange
                   {order.paymentStatus ?? '—'}
                 </dd>
               </div>
-              {order.paymentIntentId && (
+              {(order.mpPaymentId || order.paymentIntentId) && (
                 <div className="flex justify-between">
-                  <dt>Stripe ID</dt>
+                  <dt>{order.mpPaymentId ? 'Mercado Pago' : 'Stripe ID'}</dt>
                   <dd className="text-king-fg">
-                    …{order.paymentIntentId.slice(-10)}
+                    …{String(order.mpPaymentId ?? order.paymentIntentId ?? '').slice(-10)}
                   </dd>
                 </div>
               )}

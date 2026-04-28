@@ -77,10 +77,26 @@ function isRemarketingLead(o: Order): boolean {
 function remarketingTags(o: Order): string[] {
   const t: string[] = [];
   if (o.paymentStatus === 'failed') t.push('Pagamento recusado');
-  if (o.paymentStatus === 'refunded') t.push('Estorno Stripe');
+  if (o.paymentStatus === 'refunded') t.push('Estorno Mercado Pago');
   if (o.status === 'reembolsado') t.push('Reembolsado (pedido)');
   if (o.status === 'cancelado') t.push('Pedido cancelado');
   return t;
+}
+
+function paymentExternalUrl(o: Order): string | null {
+  if (o.mpPaymentId) {
+    return `https://www.mercadopago.com.br/activities/1/detail/${encodeURIComponent(String(o.mpPaymentId))}`;
+  }
+  if (o.paymentIntentId) {
+    return `https://dashboard.stripe.com/payments/${encodeURIComponent(o.paymentIntentId)}`;
+  }
+  return null;
+}
+
+function paymentGatewayLabel(o: Order): string {
+  if (o.mpPaymentId) return 'Mercado Pago';
+  if (o.paymentIntentId) return 'Stripe';
+  return '';
 }
 
 function onlyDigits(v: string): string {
@@ -189,7 +205,7 @@ export default function AdminKPIs({ orders }: Props) {
         o.total.toFixed(2).replace('.', ','),
         formatDate(o.createdAt),
         o.id,
-        o.paymentIntentId ?? '',
+        (o.mpPaymentId ? String(o.mpPaymentId) : o.paymentIntentId) ?? '',
       ].join('\t')
     );
     void navigator.clipboard.writeText([head, ...rows].join('\n')).then(() =>
@@ -513,14 +529,14 @@ export default function AdminKPIs({ orders }: Props) {
                                 WhatsApp
                               </a>
                             ) : null}
-                            {o.paymentIntentId ? (
+                            {paymentExternalUrl(o) ? (
                               <a
-                                href={stripePaymentUrl(o.paymentIntentId)}
+                                href={paymentExternalUrl(o) as string}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-king-silver underline-offset-2 hover:text-king-fg hover:underline"
                               >
-                                Stripe
+                                {paymentGatewayLabel(o)}
                                 <ExternalLink className="h-3 w-3" />
                               </a>
                             ) : null}
@@ -575,14 +591,14 @@ export default function AdminKPIs({ orders }: Props) {
                           WhatsApp
                         </a>
                       ) : null}
-                      {o.paymentIntentId ? (
+                      {paymentExternalUrl(o) ? (
                         <a
-                          href={stripePaymentUrl(o.paymentIntentId)}
+                          href={paymentExternalUrl(o) as string}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-king-silver underline"
                         >
-                          Stripe <ExternalLink className="h-3 w-3" />
+                          {paymentGatewayLabel(o)} <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : null}
                     </div>
