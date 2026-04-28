@@ -121,10 +121,6 @@ export default function SettingsTab() {
             <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-king-fg">
               Ativar pagamento via PIX no checkout
             </p>
-            <p className="mt-1 font-serif text-sm italic text-king-silver/80">
-              Quando ativo, o cliente pode escolher PIX como forma de pagamento. O QR Code é gerado
-              localmente com a chave abaixo.
-            </p>
           </div>
         </label>
 

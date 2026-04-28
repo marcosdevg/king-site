@@ -41,21 +41,84 @@ async function deductInventoryIfPaid(
   }
 }
 
-async function notifySaleApproved(orderId: string, paymentId: number, totalBrl: number) {
+function fmtBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+async function notifySaleApproved(
+  orderId: string,
+  paymentId: number,
+  order: Record<string, unknown> | undefined,
+  fallbackTotal: number
+) {
   try {
+    const total =
+      typeof order?.total === 'number' ? order.total : fallbackTotal;
+    const userEmail = typeof order?.userEmail === 'string' ? order.userEmail : '';
+    const shipping = (order?.shipping || {}) as Record<string, unknown>;
+    const customer = typeof shipping.fullName === 'string' ? shipping.fullName : '';
+    const phone = typeof shipping.phone === 'string' ? shipping.phone : '';
+    const cep = typeof shipping.zip === 'string' ? shipping.zip : '';
+    const city = typeof shipping.city === 'string' ? shipping.city : '';
+    const state = typeof shipping.state === 'string' ? shipping.state : '';
+    const addressLine = [
+      typeof shipping.address === 'string' ? shipping.address : '',
+      typeof shipping.number === 'string' ? shipping.number : '',
+      typeof shipping.complement === 'string' ? shipping.complement : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const shippingService = (order?.shippingService || {}) as Record<string, unknown>;
+    const shippingName =
+      typeof shippingService.name === 'string' ? shippingService.name : '';
+    const items = Array.isArray(order?.items) ? (order!.items as Array<Record<string, unknown>>) : [];
+    const itemsCount = items.reduce(
+      (acc, i) => acc + (typeof i.quantity === 'number' ? i.quantity : 1),
+      0
+    );
+    const paymentMethod =
+      typeof order?.paymentMethod === 'string' ? order.paymentMethod : 'card';
+    const channelLabel = paymentMethod === 'pix' ? 'PIX' : 'Cartão';
+
+    const message = [
+      '🚀 Nova Venda Realizada!',
+      `💰 Valor: ${fmtBRL(total)}`,
+      `🛍️ Cliente: ${customer || '—'}`,
+      `📧 E-mail: ${userEmail || '—'}`,
+      `📞 Telefone: ${phone || '—'}`,
+      `📦 Entrega: ${shippingName || '—'}`,
+      `📍 ${addressLine || '—'} · ${city}/${state}`,
+      `📮 CEP: ${cep || '—'}`,
+      `🛒 Itens: ${itemsCount}`,
+      `💳 Forma: ${channelLabel}`,
+      `🆔 Pedido: ${orderId}`,
+      `🪪 MP: mp_${paymentId}`,
+    ].join('\n');
+
     await postToN8n({
       source: 'king-mp-webhook',
       stripeEvent: 'payment.approved',
       whatsapp: notifyWhatsapp(),
       paymentIntentId: `mp_${paymentId}`,
-      amountBrl: totalBrl,
+      amountBrl: total,
       currency: 'brl',
       metadata: {
         orderId,
         mpPaymentId: String(paymentId),
         gateway: 'mercadopago',
+        channel: paymentMethod,
+        customer,
+        userEmail,
+        phone,
+        shipping_service: shippingName,
+        shipping_zip: cep,
+        shipping_city: city,
+        shipping_state: state,
+        shipping_address: addressLine,
+        items_count: String(itemsCount),
+        total_brl: total.toFixed(2),
       },
-      message: `Nova venda KING — ${totalBrl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · pedido ${orderId}`,
+      message,
     });
   } catch (err) {
     console.error('[mp] notify n8n failed:', err);
@@ -255,7 +318,7 @@ router.get('/pix/status', async (req: Request, res: Response) => {
         typeof order.total === 'number'
           ? order.total
           : payment.transaction_amount ?? 0;
-      await notifySaleApproved(orderId, payment.id, total);
+      await notifySaleApproved(orderId, payment.id, order, total);
     }
 
     res.json({
@@ -383,7 +446,7 @@ router.post('/card', async (req: Request, res: Response) => {
     if (payment.status === 'approved') {
       await deductInventoryIfPaid(orderRef, { id: payment.id, status: 'approved' });
       const total = typeof order.total === 'number' ? order.total : amt;
-      await notifySaleApproved(orderId, payment.id, total);
+      await notifySaleApproved(orderId, payment.id, order, total);
     }
 
     res.json({
@@ -453,7 +516,12 @@ router.post('/webhook', async (req: Request, res: Response) => {
         typeof order?.total === 'number'
           ? order.total
           : payment.transaction_amount ?? 0;
-      await notifySaleApproved(payment.external_reference, payment.id, total);
+      await notifySaleApproved(
+        payment.external_reference,
+        payment.id,
+        order,
+        total
+      );
     }
   } catch (err) {
     console.error('[mp/webhook]', err);

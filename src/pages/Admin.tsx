@@ -48,6 +48,7 @@ import {
   kingLogoPretoOnDarkImgClass,
 } from '@/assets/logos';
 import {
+  deleteOrders,
   listAllOrders,
   updateOrderStatus,
   updateOrderPaymentStatus,
@@ -82,6 +83,7 @@ export default function Admin() {
   const [productsPage, setProductsPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
   const [orderFilters, setOrderFilters] = useState<OrdersFilters>(EMPTY_FILTERS);
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
 
   const filteredOrders = useMemo(
     () => orders.filter((o) => matchesFilters(o, orderFilters)),
@@ -195,6 +197,45 @@ export default function Admin() {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, paymentStatus } : o)));
     } catch {
       toast.error('Erro ao atualizar pagamento');
+    }
+  };
+
+  const toggleOrderSelection = (id: string) => {
+    setSelectedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllVisible = (visibleIds: string[], all: boolean) => {
+    setSelectedOrders((prev) => {
+      const next = new Set(prev);
+      if (all) visibleIds.forEach((id) => next.add(id));
+      else visibleIds.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+  const onBulkDeleteOrders = async () => {
+    const ids = [...selectedOrders];
+    if (ids.length === 0) return;
+    if (
+      !confirm(
+        `Apagar ${ids.length} pedido(s) DEFINITIVAMENTE? Esta ação não pode ser desfeita.`
+      )
+    )
+      return;
+    try {
+      const r = await deleteOrders(ids);
+      toast.success(
+        r.fail === 0
+          ? `${r.ok} pedido(s) apagado(s)`
+          : `${r.ok} apagado(s), ${r.fail} falharam`
+      );
+      setOrders((prev) => prev.filter((o) => !selectedOrders.has(o.id)));
+      setSelectedOrders(new Set());
+    } catch {
+      toast.error('Erro ao apagar pedidos');
     }
   };
 
@@ -379,6 +420,39 @@ export default function Admin() {
               filtered={filteredOrders}
               totalAll={orders.length}
             />
+
+            {ordersPageItems.length > 0 && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-king-jet/40 px-4 py-3">
+                <label className="flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-king-red"
+                    checked={ordersPageItems.every((o) => selectedOrders.has(o.id))}
+                    onChange={(e) =>
+                      toggleSelectAllVisible(
+                        ordersPageItems.map((o) => o.id),
+                        e.target.checked
+                      )
+                    }
+                  />
+                  Selecionar todos da página
+                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+                    {selectedOrders.size} selecionado(s)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={selectedOrders.size === 0}
+                    onClick={onBulkDeleteOrders}
+                    className="inline-flex items-center gap-2 border border-red-500/50 bg-red-500/10 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.25em] text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <HiOutlineTrash /> Apagar selecionados
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4">
               {orders.length === 0 ? (
                 <p className="py-10 text-center font-serif italic text-king-silver/70">
@@ -393,6 +467,8 @@ export default function Admin() {
                 <OrderCard
                   key={o.id}
                   order={o}
+                  selected={selectedOrders.has(o.id)}
+                  onSelectChange={() => toggleOrderSelection(o.id)}
                   onStatusChange={onStatusChange}
                   onPaymentStatusChange={onPaymentStatusChange}
                 />

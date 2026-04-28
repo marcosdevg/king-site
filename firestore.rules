@@ -87,7 +87,9 @@ service cloud.firestore {
 
       // Usuário dono nunca altera pedido após criação; só admin.
       allow update: if isAdmin();
-      allow delete: if isAdmin();
+      // Admin apaga qualquer; dono pode apagar o próprio pedido.
+      allow delete: if isAdmin()
+                    || (isSignedIn() && current().userId == request.auth.uid);
     }
 
     // =========================================================

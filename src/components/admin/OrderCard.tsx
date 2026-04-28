@@ -36,6 +36,9 @@ type Props = {
   onStatusChange: (id: string, status: OrderStatus) => void;
   /** Quando definido, permite alinhar o Firestore ao estorno/recusa do gateway (remarketing nos KPIs). */
   onPaymentStatusChange?: (id: string, paymentStatus: Order['paymentStatus']) => void;
+  /** Habilita checkbox de seleção (modo bulk no admin). */
+  selected?: boolean;
+  onSelectChange?: () => void;
 };
 
 const PAYMENT_STATUS_SELECT: { value: NonNullable<Order['paymentStatus']>; label: string }[] = [
@@ -45,7 +48,13 @@ const PAYMENT_STATUS_SELECT: { value: NonNullable<Order['paymentStatus']>; label
   { value: 'refunded', label: 'Estornado' },
 ];
 
-export default function OrderCard({ order, onStatusChange, onPaymentStatusChange }: Props) {
+export default function OrderCard({
+  order,
+  onStatusChange,
+  onPaymentStatusChange,
+  selected,
+  onSelectChange,
+}: Props) {
   const [open, setOpen] = useState(false);
   const short = order.id.slice(0, 10).toUpperCase();
   const phone = waPhone(order.shipping.phone);
@@ -61,7 +70,17 @@ export default function OrderCard({ order, onStatusChange, onPaymentStatusChange
       className="glass overflow-hidden"
     >
       <header className="flex flex-wrap items-start justify-between gap-4 p-5">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-3">
+          {onSelectChange && (
+            <input
+              type="checkbox"
+              aria-label="Selecionar pedido"
+              checked={!!selected}
+              onChange={onSelectChange}
+              className="mt-1 h-4 w-4 shrink-0 accent-king-red"
+            />
+          )}
+          <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver">
               #{short}
@@ -97,6 +116,7 @@ export default function OrderCard({ order, onStatusChange, onPaymentStatusChange
               </span>
             )}
           </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

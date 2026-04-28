@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { FaWhatsapp } from 'react-icons/fa';
-import { HiOutlineLogout, HiOutlineDownload } from 'react-icons/hi';
+import { HiOutlineLogout, HiOutlineDownload, HiOutlineTrash } from 'react-icons/hi';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { useAuthStore } from '@/store/useAuthStore';
-import { listOrdersByUser, type Order, type OrderStatus } from '@/services/orders.service';
+import {
+  deleteOrders,
+  listOrdersByUser,
+  type Order,
+  type OrderStatus,
+} from '@/services/orders.service';
 import { logout } from '@/services/auth.service';
 import { formatBRL, formatDate } from '@/utils/format';
 import { openWhatsApp, buildOrderMessage, buildSupportMessage } from '@/utils/whatsapp';
@@ -26,6 +32,8 @@ export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const pwa = usePWAInstall();
 
@@ -40,6 +48,35 @@ export default function Dashboard() {
   const onLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const selectAll = (all: boolean) => {
+    setSelected(all ? new Set(orders.map((o) => o.id)) : new Set());
+  };
+  const deleteSelected = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Apagar ${selected.size} pedido(s)? Esta ação é definitiva.`)) return;
+    setDeleting(true);
+    try {
+      const r = await deleteOrders([...selected]);
+      toast.success(
+        r.fail === 0 ? `${r.ok} pedido(s) apagado(s)` : `${r.ok} apagado(s), ${r.fail} falharam`
+      );
+      setOrders((prev) => prev.filter((o) => !selected.has(o.id)));
+      setSelected(new Set());
+    } catch {
+      toast.error('Erro ao apagar pedidos');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -125,6 +162,30 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-king-jet/40 px-4 py-3">
+                <label className="flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-king-red"
+                    checked={orders.length > 0 && selected.size === orders.length}
+                    onChange={(e) => selectAll(e.target.checked)}
+                  />
+                  Selecionar todos ({orders.length})
+                </label>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+                    {selected.size} selecionado(s)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={selected.size === 0 || deleting}
+                    onClick={deleteSelected}
+                    className="inline-flex items-center gap-2 border border-red-500/50 bg-red-500/10 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.25em] text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <HiOutlineTrash /> Apagar selecionados
+                  </button>
+                </div>
+              </div>
               {orders.map((order, i) => {
                 const st = STATUS_MAP[order.status];
                 return (
@@ -136,13 +197,22 @@ export default function Dashboard() {
                     className="glass overflow-hidden"
                   >
                     <div className="flex flex-col gap-2 border-b border-white/5 p-5 md:flex-row md:items-center md:justify-between">
-                      <div>
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar pedido"
+                          checked={selected.has(order.id)}
+                          onChange={() => toggleSelect(order.id)}
+                          className="mt-1 h-4 w-4 shrink-0 accent-king-red"
+                        />
+                        <div>
                         <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-king-silver">
                           Pedido #{order.id.slice(0, 10)}
                         </p>
                         <p className="mt-1 font-serif italic text-sm text-king-silver/70">
                           {formatDate(order.createdAt)}
                         </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-4">
                         <span className={cn('font-mono text-[11px] uppercase tracking-[0.25em]', st.color)}>

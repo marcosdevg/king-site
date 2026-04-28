@@ -13,7 +13,7 @@ import {
 import { Crown, ShoppingBag, TrendingUp, Wallet, Users, Copy, ExternalLink, Loader2 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import type { Order } from '@/services/orders.service';
+import { deleteOrders, type Order } from '@/services/orders.service';
 import { formatBRL, formatDate } from '@/utils/format';
 import { useThemeStore } from '@/store/useThemeStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -117,7 +117,45 @@ function stripePaymentUrl(paymentIntentId: string): string {
 export default function AdminKPIs({ orders }: Props) {
   const user = useAuthStore((s) => s.user);
   const [n8nTesting, setN8nTesting] = useState(false);
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [wiping, setWiping] = useState(false);
   const siteTheme = useThemeStore((s) => s.theme);
+
+  /** Pedidos no intervalo selecionado (ou todos, se sem intervalo). */
+  const orders0 = useMemo(() => {
+    if (!dateFrom && !dateTo) return orders;
+    const fromMs = dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : -Infinity;
+    const toMs = dateTo ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
+    return orders.filter((o) => {
+      const t = tsFromOrder(o);
+      if (!Number.isFinite(t)) return false;
+      return t >= fromMs && t <= toMs;
+    });
+  }, [orders, dateFrom, dateTo]);
+
+  const wipeAllOrders = async () => {
+    if (!confirm(
+      `Apagar TODOS os ${orders0.length} pedidos do intervalo selecionado? Esta ação é DEFINITIVA.`
+    ))
+      return;
+    if (!confirm('Tem certeza absoluta? Os pedidos serão removidos do Firestore permanentemente.'))
+      return;
+    setWiping(true);
+    try {
+      const ids = orders0.map((o) => o.id);
+      const r = await deleteOrders(ids);
+      toast.success(
+        r.fail === 0
+          ? `${r.ok} pedido(s) apagado(s). Recarregue a aba Pedidos pra atualizar.`
+          : `${r.ok} apagado(s), ${r.fail} falharam`
+      );
+    } catch {
+      toast.error('Erro ao apagar pedidos');
+    } finally {
+      setWiping(false);
+    }
+  };
   const chart = useMemo(() => {
     const light = siteTheme === 'light';
     return {
@@ -140,22 +178,22 @@ export default function AdminKPIs({ orders }: Props) {
     [chart.tickFill]
   );
 
-  const paid = useMemo(() => orders.filter(isPaidSale), [orders]);
+  const paid = useMemo(() => orders0.filter(isPaidSale), [orders0]);
 
   const remarketing = useMemo(() => {
-    return orders
+    return orders0
       .filter(isRemarketingLead)
       .sort((a, b) => tsFromOrder(b) - tsFromOrder(a));
-  }, [orders]);
+  }, [orders0]);
 
   const remarketingStats = useMemo(
     () => ({
-      failed: orders.filter((o) => o.paymentStatus === 'failed').length,
-      refunded: orders.filter((o) => o.paymentStatus === 'refunded').length,
-      cancelado: orders.filter((o) => o.status === 'cancelado').length,
-      reembolsado: orders.filter((o) => o.status === 'reembolsado').length,
+      failed: orders0.filter((o) => o.paymentStatus === 'failed').length,
+      refunded: orders0.filter((o) => o.paymentStatus === 'refunded').length,
+      cancelado: orders0.filter((o) => o.status === 'cancelado').length,
+      reembolsado: orders0.filter((o) => o.status === 'reembolsado').length,
     }),
-    [orders]
+    [orders0]
   );
 
   const copyRemarketingEmails = useCallback(() => {
@@ -261,21 +299,71 @@ export default function AdminKPIs({ orders }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => void pingN8nTest()}
-          disabled={n8nTesting || !user}
-          title="Enviar evento de teste ao webhook n8n (simula venda → WhatsApp)"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-black shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {n8nTesting ? (
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-          ) : (
-            <FaWhatsapp className="h-5 w-5" aria-hidden />
+      <div className="flex flex-wrap items-end justify-between gap-3 border border-white/10 bg-king-jet/40 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+              De
+            </span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="select-king-dark font-mono text-xs"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver">
+              Até
+            </span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="select-king-dark font-mono text-xs"
+            />
+          </label>
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+              }}
+              className="border border-white/15 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver hover:border-king-red hover:text-king-fg"
+            >
+              Limpar período
+            </button>
           )}
-          <span className="sr-only">Testar notificação WhatsApp via n8n</span>
-        </button>
+          <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-king-silver/60">
+            {orders0.length} de {orders.length} pedido(s) no período
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void wipeAllOrders()}
+            disabled={wiping || orders0.length === 0}
+            className="inline-flex items-center gap-2 border border-red-500/50 bg-red-500/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.25em] text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {wiping ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            Apagar pedidos do período
+          </button>
+          <button
+            type="button"
+            onClick={() => void pingN8nTest()}
+            disabled={n8nTesting || !user}
+            title="Enviar evento de teste ao webhook n8n (simula venda → WhatsApp)"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-black shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {n8nTesting ? (
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            ) : (
+              <FaWhatsapp className="h-5 w-5" aria-hidden />
+            )}
+            <span className="sr-only">Testar notificação WhatsApp via n8n</span>
+          </button>
+        </div>
       </div>
 
       <section className="grid grid-cols-2 gap-4 md:grid-cols-4">

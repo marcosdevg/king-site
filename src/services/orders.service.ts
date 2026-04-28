@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   getDocs,
   orderBy,
   query,
@@ -180,4 +181,14 @@ export async function updateOrderPaymentStatus(
   paymentStatus: Order['paymentStatus']
 ) {
   await updateDoc(doc(db, COLLECTION, orderId), { paymentStatus });
+}
+
+export async function deleteOrder(orderId: string): Promise<void> {
+  await deleteDoc(doc(db, COLLECTION, orderId));
+}
+
+export async function deleteOrders(ids: string[]): Promise<{ ok: number; fail: number }> {
+  const results = await Promise.allSettled(ids.map((id) => deleteOrder(id)));
+  const ok = results.filter((r) => r.status === 'fulfilled').length;
+  return { ok, fail: results.length - ok };
 }
