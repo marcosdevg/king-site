@@ -119,7 +119,7 @@ export default function PostCheckoutModal({
             Pedido confirmado
           </p>
           <h2 className="heading-display mt-3 text-3xl tracking-[0.1em]">
-            A realeza agradece
+            Obrigado por confiar em nós!
           </h2>
           <p
             className={cn(
