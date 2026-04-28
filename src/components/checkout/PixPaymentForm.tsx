@@ -109,6 +109,33 @@ export default function PixPaymentForm({
     return () => unsub();
   }, [orderId, phase]);
 
+  // 3) Polling fallback — caso o webhook MP não chegue, força a reconciliação
+  //    pelo backend a cada 5s. Quando MP retornar 'approved', o backend marca
+  //    o pedido como paid e o onSnapshot acima dispara onPaid.
+  useEffect(() => {
+    if (!orderId || phase !== 'awaiting') return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const u = auth.currentUser;
+        if (!u) return;
+        const idToken = await u.getIdToken();
+        await fetch(`/api/pix/status?orderId=${encodeURIComponent(orderId)}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+      } catch {
+        // silencioso — só fallback
+      }
+    };
+    void tick();
+    const id = window.setInterval(tick, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [orderId, phase]);
+
   const code = pix?.qrCode ?? '';
 
   const onCopy = async () => {

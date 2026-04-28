@@ -128,6 +128,114 @@ router.post('/create', async (req: Request, res: Response) => {
 });
 
 /**
+ * Reconciliação ativa — chamado pelo frontend a cada poucos segundos enquanto
+ * o cliente espera o PIX cair. Garante atualização mesmo se o webhook MP falhar.
+ */
+router.get('/status', async (req: Request, res: Response) => {
+  try {
+    const auth = req.headers.authorization;
+    const m = auth?.match(/^Bearer\s+(.+)$/i);
+    const idToken = m?.[1]?.trim();
+    if (!idToken) {
+      res.status(401).json({ error: 'Sessão necessária.' });
+      return;
+    }
+    const email = await getEmailFromFirebaseIdToken(idToken);
+    if (!email) {
+      res.status(401).json({ error: 'Sessão inválida.' });
+      return;
+    }
+
+    const orderId = (req.query.orderId as string | undefined)?.trim();
+    if (!orderId) {
+      res.status(400).json({ error: 'orderId obrigatório.' });
+      return;
+    }
+
+    const db = getAdminFirestore();
+    if (!db) {
+      res.status(500).json({ error: 'Firestore admin indisponível.' });
+      return;
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) {
+      res.status(404).json({ error: 'Pedido não encontrado.' });
+      return;
+    }
+    const order = snap.data() as Record<string, unknown>;
+    if (order.userEmail && order.userEmail !== email) {
+      res.status(403).json({ error: 'Pedido pertence a outro usuário.' });
+      return;
+    }
+
+    const mpId = order.mpPaymentId;
+    if (!mpId) {
+      res.json({ paymentStatus: order.paymentStatus ?? 'pending', mpStatus: null });
+      return;
+    }
+
+    if (order.paymentStatus === 'paid') {
+      res.json({ paymentStatus: 'paid', mpStatus: order.mpStatus ?? 'approved' });
+      return;
+    }
+
+    const payment = await getPayment(mpId as number | string);
+    const updates: Record<string, unknown> = {
+      mpStatus: payment.status,
+      mpStatusDetail: payment.status_detail ?? null,
+    };
+
+    if (payment.status === 'approved') {
+      updates.paymentStatus = 'paid';
+      updates.status = 'confirmado';
+      updates.paidAt = payment.date_approved ?? new Date().toISOString();
+    } else if (payment.status === 'cancelled' || payment.status === 'rejected') {
+      updates.paymentStatus = 'failed';
+    } else if (payment.status === 'refunded' || payment.status === 'charged_back') {
+      updates.paymentStatus = 'refunded';
+    }
+
+    await orderRef.update(updates);
+
+    if (payment.status === 'approved' && order.paymentStatus !== 'paid') {
+      const total =
+        typeof order.total === 'number'
+          ? order.total
+          : payment.transaction_amount ?? 0;
+      try {
+        await postToN8n({
+          source: 'king-pix-poll',
+          stripeEvent: 'pix.approved',
+          whatsapp: notifyWhatsapp(),
+          paymentIntentId: `mp_${payment.id}`,
+          amountBrl: total,
+          currency: 'brl',
+          metadata: {
+            orderId,
+            mpPaymentId: String(payment.id),
+            channel: 'pix',
+          },
+          message: `Nova venda KING (PIX) — ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · pedido ${orderId}`,
+        });
+      } catch (err) {
+        console.error('[pix/status] notify n8n failed:', err);
+      }
+    }
+
+    res.json({
+      paymentStatus: updates.paymentStatus ?? order.paymentStatus ?? 'pending',
+      mpStatus: payment.status,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Falha ao consultar status';
+    console.error('[pix/status]', msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/**
  * Webhook do Mercado Pago. Confirmamos via GET /v1/payments/{id} pra evitar spoof.
  * Se status === 'approved', atualiza o pedido pra paid e dispara notificações.
  */
