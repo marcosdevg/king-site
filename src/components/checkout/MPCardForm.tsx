@@ -91,12 +91,7 @@ export default function MPCardForm(props: Props) {
           },
           callbacks: {
             onFormMounted: (err: unknown) => {
-              if (err) {
-                console.error('[mp] form mount error', err);
-                setSdkError('Falha ao carregar o formulário do Mercado Pago.');
-              } else if (!cancelled) {
-                setSdkReady(true);
-              }
+              if (err) console.error('[mp] form mount error', err);
             },
             onSubmit: async (event: Event) => {
               event.preventDefault();
@@ -173,6 +168,7 @@ export default function MPCardForm(props: Props) {
           },
         });
         cardFormRef.current = cardForm;
+        if (!cancelled) setSdkReady(true);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro ao iniciar SDK MP';
         if (!cancelled) setSdkError(msg);
@@ -189,39 +185,70 @@ export default function MPCardForm(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Detecta se os 4 campos do cartão (número, validade, cvv, nome) estão preenchidos.
+  // Formatadores + detecção de cartão preenchido.
   useEffect(() => {
     if (!sdkReady) return;
-    const ids = [
-      FIELD_IDS.cardNumber,
-      FIELD_IDS.expirationDate,
-      FIELD_IDS.securityCode,
-      FIELD_IDS.cardholderName,
-    ];
-    const inputs = ids
-      .map((id) => document.getElementById(id) as HTMLInputElement | null)
-      .filter(Boolean) as HTMLInputElement[];
-    if (inputs.length === 0) return;
+    const numberEl = document.getElementById(FIELD_IDS.cardNumber) as HTMLInputElement | null;
+    const expEl = document.getElementById(FIELD_IDS.expirationDate) as HTMLInputElement | null;
+    const cvvEl = document.getElementById(FIELD_IDS.securityCode) as HTMLInputElement | null;
+    const nameEl = document.getElementById(FIELD_IDS.cardholderName) as HTMLInputElement | null;
+    if (!numberEl || !expEl || !cvvEl || !nameEl) return;
+
+    const formatNumber = () => {
+      const digits = onlyDigits(numberEl.value).slice(0, 19);
+      const groups = digits.match(/.{1,4}/g) ?? [];
+      const formatted = groups.join(' ');
+      if (formatted !== numberEl.value) {
+        numberEl.value = formatted;
+      }
+    };
+    const formatExpiry = () => {
+      const digits = onlyDigits(expEl.value).slice(0, 4);
+      let v = digits;
+      if (digits.length >= 3) v = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+      else if (digits.length >= 1) v = digits;
+      if (v !== expEl.value) {
+        expEl.value = v;
+      }
+    };
+    const formatCvv = () => {
+      const v = onlyDigits(cvvEl.value).slice(0, 4);
+      if (v !== cvvEl.value) cvvEl.value = v;
+    };
 
     const check = () => {
-      const num = onlyDigits(
-        (document.getElementById(FIELD_IDS.cardNumber) as HTMLInputElement | null)?.value ?? ''
-      );
-      const exp = onlyDigits(
-        (document.getElementById(FIELD_IDS.expirationDate) as HTMLInputElement | null)?.value ?? ''
-      );
-      const cvv = onlyDigits(
-        (document.getElementById(FIELD_IDS.securityCode) as HTMLInputElement | null)?.value ?? ''
-      );
-      const name = (
-        (document.getElementById(FIELD_IDS.cardholderName) as HTMLInputElement | null)?.value ?? ''
-      ).trim();
-      setCardFilled(num.length >= 14 && exp.length >= 4 && cvv.length >= 3 && name.length >= 3);
+      const num = onlyDigits(numberEl.value);
+      const exp = onlyDigits(expEl.value);
+      const cvv = onlyDigits(cvvEl.value);
+      const name = nameEl.value.trim();
+      setCardFilled(num.length >= 13 && exp.length >= 4 && cvv.length >= 3 && name.length >= 3);
     };
-    inputs.forEach((el) => el.addEventListener('input', check));
+
+    const onNumberInput = () => {
+      formatNumber();
+      check();
+    };
+    const onExpInput = () => {
+      formatExpiry();
+      check();
+    };
+    const onCvvInput = () => {
+      formatCvv();
+      check();
+    };
+    const onNameInput = () => check();
+
+    numberEl.addEventListener('input', onNumberInput);
+    expEl.addEventListener('input', onExpInput);
+    cvvEl.addEventListener('input', onCvvInput);
+    nameEl.addEventListener('input', onNameInput);
     check();
+
     return () => {
-      inputs.forEach((el) => el.removeEventListener('input', check));
+      numberEl.removeEventListener('input', onNumberInput);
+      expEl.removeEventListener('input', onExpInput);
+      cvvEl.removeEventListener('input', onCvvInput);
+      nameEl.removeEventListener('input', onNameInput);
     };
   }, [sdkReady]);
 
@@ -254,10 +281,11 @@ export default function MPCardForm(props: Props) {
       <div className={cn(!sdkReady && 'hidden', 'flex flex-col gap-6')}>
         {/* CARTÃO VISUAL — só os 4 campos principais */}
         <div className="mx-auto w-full max-w-[440px]">
-          <div className="relative aspect-[1.586/1] overflow-hidden rounded-2xl border border-king-red/40 bg-gradient-to-br from-[#2a070e] via-[#15040a] to-[#0a0a0a] p-6 shadow-[0_24px_60px_rgba(220,20,60,0.25)]">
+          <div className="relative aspect-[1.586/1] overflow-hidden rounded-2xl border border-purple-400/30 bg-gradient-to-br from-[#5b1a8e] via-[#3d106a] to-[#1f0640] p-6 shadow-[0_24px_60px_rgba(130,42,180,0.45)]">
             {/* fundo decorativo */}
-            <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-king-red/15 blur-3xl" />
-            <div className="pointer-events-none absolute -left-12 bottom-0 h-40 w-40 rounded-full bg-king-glow/10 blur-2xl" />
+            <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-fuchsia-500/30 blur-3xl" />
+            <div className="pointer-events-none absolute -left-12 bottom-0 h-40 w-40 rounded-full bg-purple-300/15 blur-2xl" />
+            <div className="pointer-events-none absolute right-8 top-8 h-32 w-32 rounded-full bg-violet-400/20 blur-2xl" />
 
             <div className="relative flex h-full flex-col">
               <div className="flex items-start justify-between">
@@ -366,7 +394,7 @@ export default function MPCardForm(props: Props) {
 
 function CardLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block font-mono text-[8px] uppercase tracking-[0.32em] text-king-silver/70 sm:text-[9px]">
+    <span className="block font-mono text-[8px] uppercase tracking-[0.32em] text-violet-200/80 sm:text-[9px]">
       {children}
     </span>
   );
