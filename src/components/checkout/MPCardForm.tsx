@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { HiOutlineLockClosed, HiOutlineShieldCheck } from 'react-icons/hi';
 import { Loader2 } from 'lucide-react';
 import GlowButton from '@/components/ui/GlowButton';
@@ -185,6 +185,31 @@ export default function MPCardForm(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Pré-preenche campos escondidos: email (Firebase) + tipo doc (CPF).
+  useEffect(() => {
+    if (!sdkReady) return;
+    const emailEl = document.getElementById(FIELD_IDS.cardholderEmail) as HTMLInputElement | null;
+    if (emailEl && auth.currentUser?.email) {
+      emailEl.value = auth.currentUser.email;
+      emailEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    // Tipo doc é populado pelo MP de forma assíncrona — força CPF assim que disponível.
+    const trySetCpf = (attempt = 0) => {
+      const sel = document.getElementById(
+        FIELD_IDS.identificationType
+      ) as HTMLSelectElement | null;
+      if (!sel) return;
+      const hasCpf = Array.from(sel.options).some((o) => o.value === 'CPF');
+      if (hasCpf) {
+        sel.value = 'CPF';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      } else if (attempt < 20) {
+        setTimeout(() => trySetCpf(attempt + 1), 250);
+      }
+    };
+    trySetCpf();
+  }, [sdkReady]);
+
   // Formatadores + detecção de cartão preenchido.
   useEffect(() => {
     if (!sdkReady) return;
@@ -332,35 +357,35 @@ export default function MPCardForm(props: Props) {
           </div>
         </div>
 
-        {/* CAMPOS COMPLEMENTARES — aparecem só após preencher o cartão */}
-        <AnimatePresence initial={false}>
-          {cardFilled && (
-            <motion.div
-              key="extras"
-              initial={{ opacity: 0, y: 10, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: 'auto' }}
-              exit={{ opacity: 0, y: 10, height: 0 }}
-              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <KSelect label="Banco emissor" inputId={FIELD_IDS.issuer} />
-                  <KSelect label="Parcelas" inputId={FIELD_IDS.installments} />
-                </div>
-                <div className="grid grid-cols-[120px_1fr] gap-4">
-                  <KSelect label="Tipo doc." inputId={FIELD_IDS.identificationType} />
-                  <KField label="CPF do titular" inputId={FIELD_IDS.identificationNumber} />
-                </div>
-                <KField
-                  label="E-mail"
-                  inputId={FIELD_IDS.cardholderEmail}
-                  inputType="email"
-                />
-              </div>
-            </motion.div>
+        {/*
+          Campos invisíveis ao usuário, mas sempre montados pra o SDK do MP achar os IDs:
+          - Banco emissor → MP detecta automaticamente pelo número do cartão
+          - Tipo doc → forçamos "CPF"
+          - Email → preenchido com o email da conta logada
+        */}
+        <div className="sr-only" aria-hidden="true">
+          <select id={FIELD_IDS.issuer} />
+          <select id={FIELD_IDS.identificationType} />
+          <input id={FIELD_IDS.cardholderEmail} type="email" />
+        </div>
+
+        {/*
+          Campos visíveis após preencher o cartão: só CPF e Parcelas.
+        */}
+        <div
+          aria-hidden={!cardFilled}
+          className={cn(
+            'overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+            cardFilled
+              ? 'pointer-events-auto max-h-[600px] opacity-100'
+              : 'pointer-events-none max-h-0 opacity-0'
           )}
-        </AnimatePresence>
+        >
+          <div className="flex flex-col gap-4 pt-2">
+            <KField label="CPF do titular" inputId={FIELD_IDS.identificationNumber} />
+            <KSelect label="Parcelas" inputId={FIELD_IDS.installments} />
+          </div>
+        </div>
 
         {/* Sempre visíveis: aviso + botão (botão só ativo após preencher) */}
         <div className="flex items-center gap-3 rounded-md border border-white/10 bg-king-black/30 px-4 py-3 text-king-silver">
