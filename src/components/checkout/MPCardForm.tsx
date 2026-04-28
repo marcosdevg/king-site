@@ -315,7 +315,7 @@ export default function MPCardForm(props: Props) {
             <div className="relative flex h-full flex-col">
               <div className="flex items-start justify-between">
                 <div className="h-9 w-12 rounded-md bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 shadow-inner" />
-                <KingLogo variant="auto" className="h-5 w-auto opacity-90" />
+                <KingLogo variant="white" className="h-5 w-auto opacity-95" />
               </div>
 
               <div className="mt-5">
@@ -323,7 +323,7 @@ export default function MPCardForm(props: Props) {
                 <input
                   id={FIELD_IDS.cardNumber}
                   inputMode="numeric"
-                  className="mt-1 w-full border-b border-white/15 bg-transparent pb-1 font-mono text-xl tracking-[0.18em] text-king-fg placeholder-king-silver/40 outline-none transition focus:border-white/40 focus:placeholder-king-silver/20 sm:text-2xl"
+                  className="mt-1 w-full border-b border-white/15 bg-transparent pb-1 font-mono text-xl tracking-[0.18em] !text-white placeholder-white/65 caret-white outline-none transition focus:border-white/40 focus:placeholder-white/45 sm:text-2xl"
                 />
               </div>
 
@@ -333,7 +333,7 @@ export default function MPCardForm(props: Props) {
                   <input
                     id={FIELD_IDS.cardholderName}
                     autoCapitalize="characters"
-                    className="mt-1 w-full truncate border-b border-white/15 bg-transparent pb-1 font-mono text-sm uppercase tracking-[0.18em] text-king-fg placeholder-king-silver/40 outline-none transition focus:border-white/40 sm:text-base"
+                    className="mt-1 w-full truncate border-b border-white/15 bg-transparent pb-1 font-mono text-sm uppercase tracking-[0.18em] !text-white placeholder-white/65 caret-white outline-none transition focus:border-white/40 sm:text-base"
                   />
                 </div>
                 <div>
@@ -341,7 +341,7 @@ export default function MPCardForm(props: Props) {
                   <input
                     id={FIELD_IDS.expirationDate}
                     inputMode="numeric"
-                    className="mt-1 w-[80px] border-b border-white/15 bg-transparent pb-1 font-mono text-sm tracking-[0.16em] text-king-fg placeholder-king-silver/40 outline-none transition focus:border-white/40 sm:text-base"
+                    className="mt-1 w-[80px] border-b border-white/15 bg-transparent pb-1 font-mono text-sm tracking-[0.16em] !text-white placeholder-white/65 caret-white outline-none transition focus:border-white/40 sm:text-base"
                   />
                 </div>
                 <div>
@@ -349,7 +349,7 @@ export default function MPCardForm(props: Props) {
                   <input
                     id={FIELD_IDS.securityCode}
                     inputMode="numeric"
-                    className="mt-1 w-[60px] border-b border-white/15 bg-transparent pb-1 font-mono text-sm tracking-[0.16em] text-king-fg placeholder-king-silver/40 outline-none transition focus:border-white/40 sm:text-base"
+                    className="mt-1 w-[60px] border-b border-white/15 bg-transparent pb-1 font-mono text-sm tracking-[0.16em] !text-white placeholder-white/65 caret-white outline-none transition focus:border-white/40 sm:text-base"
                   />
                 </div>
               </div>
@@ -391,7 +391,7 @@ export default function MPCardForm(props: Props) {
         <div className="flex items-center gap-3 rounded-md border border-white/10 bg-king-black/30 px-4 py-3 text-king-silver">
           <HiOutlineLockClosed className="h-4 w-4 text-king-red" />
           <span className="font-mono text-[10px] uppercase tracking-[0.25em]">
-            Dados criptografados pelo SDK do Mercado Pago — nunca chegam ao nosso servidor.
+            Pagamento seguro!
           </span>
         </div>
 
@@ -419,7 +419,7 @@ export default function MPCardForm(props: Props) {
 
 function CardLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block font-mono text-[8px] uppercase tracking-[0.32em] text-violet-200/80 sm:text-[9px]">
+    <span className="block font-mono text-[8px] uppercase tracking-[0.32em] text-white/75 sm:text-[9px]">
       {children}
     </span>
   );
